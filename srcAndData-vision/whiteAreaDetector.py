@@ -19,6 +19,8 @@ def onTopOfWhite(image):
 if __name__ == "__main__":
     name = input("input image name: ")
     img = cv.imread(name, -1)
+    #captura da imagem pode ser feita por aqui pela camera ao inves de ler imagem, funciona do mesmo jeito
+
     #cv.namedWindow('orig',cv.WINDOW_NORMAL)
     #cv.imshow('orig',a)
     result = onTopOfWhite(img)

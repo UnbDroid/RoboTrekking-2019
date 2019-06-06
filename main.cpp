@@ -1,97 +1,112 @@
-/**
- * @file rc_uart.c
- *
- * This will be the file responsible for dealing with the communication between the BBB and 
- * an arduino using a UART bus.
- * 
- * connect the RX and TX wires of one of the included 4-pin
- * JST-SH pigtails and plug into the UART1 or UART5 headers. You may also elect
- * to test UART0 on the debug header or UART2 on the GPS header. The test
- * strings this programs transmits will then loopback to the RX channel.
- */
+#define ENCODER_L 1
+#define ENCODER_R 2
 
-#include <stdio.h>
-#include <string.h>
-#include <robotcontrol.h>
+#define MOTOR_LEFT 1<<0
+#define MOTOR_RIGHT 1<<1
+
+#define MAXIMUM_VOLTAGE 7
+#define MINIMUM_VOLTAGE 0
+#define SAMPLES 1000
+#define N_PERIODS 1
+
+// Period of sampling in seconds
+#define PERIOD 0.02
+
+#include <cstdio>
+#include <iostream>
+#include <fstream>
 
 using namespace std;
 
-extern "C"
-{
-#include <rc/uart.h>
+extern "C" {
+    #include <rc/encoder.h>
+    #include <rc/time.h>
+    #include <rc/adc.h>
 }
 
-#define BUF_SIZE 32
-#define TIMEOUT_S 0.5
-#define BAUDRATE 9600
-#define MAX_SIZE 1
-#define ANSWER_SIZE 2
+double input[SAMPLES];
+pair<double, double> outputs[SAMPLES];
 
-int main()
-{
-	if (rc_kill_existing_process(2.0) < -2)
-		return -1;
-	if (rc_enable_signal_handler() == -1)
-	{
-		fprintf(stderr, "ERROR: failed to start signal handler\n");
+volatile uint8_t pwm_to_send[2];
+
+uint8_t get_pwm_from_voltage(double x){
+    double input_voltage = rc_adc_dc_jack();
+
+    int value = 255*(x/input_voltage);
+
+    return (value > 255 ? 255 : uint8_t(value));
+}
+
+void motor_set_voltage(int motors, double voltage){
+    if(motors & MOTOR_LEFT)
+        pwm_to_send[0] = get_pwm_from_voltage(voltage);
+    
+    if(motors & MOTOR_RIGHT)
+        pwm_to_send[1] = get_pwm_from_voltage(voltage);
+}
+
+void send_triangular_wave(){
+    int i=0, out1, out2;
+    double value = MINIMUM_VOLTAGE;
+
+    double rate = (MAXIMUM_VOLTAGE-MINIMUM_VOLTAGE)/double(SAMPLES/(N_PERIODS*2));
+
+    for(;i<SAMPLES;i++){
+        if((value >= MAXIMUM_VOLTAGE) && (rate > 0)){
+            value = MAXIMUM_VOLTAGE;
+            rate = -rate;
+        }
+        else if((value <= MINIMUM_VOLTAGE) && (rate < 0)){
+            value = MINIMUM_VOLTAGE;
+            rate = -rate;
+        }
+
+        motor_set_voltage(MOTOR_LEFT|MOTOR_RIGHT, value);
+    
+        out1 = rc_encoder_read(ENCODER_L);
+        out2 = rc_encoder_read(ENCODER_R);
+
+        input[i] = value;
+        outputs[i] = make_pair(out1, out2);
+
+        value = value + rate;
+
+        cout << value << endl;
+
+        // Ugly simulation of period
+        rc_usleep(int(PERIOD*1e6));
+    }
+}
+
+void save_to_file(){
+    uint i = 0;
+    
+    ofstream data_file;
+    data_file.open("data.txt");
+
+    for(;i<SAMPLES;i++){
+        data_file << input[i] << " " << outputs[i].first << " " << outputs[i].second << endl;
+    }
+
+    data_file.close();
+}
+
+int main(){
+    cout << "Lembrou de usar pin-config em todos os pinos?" << endl;
+
+    // initialize all encoders, maybe we can initialize just the ones we are using?
+	if(rc_encoder_init()){
+		fprintf(stderr,"ERROR: failed to run rc_encoder_init\n");
 		return -1;
 	}
-	rc_make_pid_file();
 
-	int arduino_bus = 1; // Bus to communicate with Arduino
+    // Start voltage ADC reader
+    if(rc_adc_init()==-1) return -1;
 
-	char *str = "0"; // Message to Arduino
+    // Starts thread that sends info to the arduino
+    // Here goes the thread that calls the functions
 
-	uint8_t buf[BUF_SIZE + 1];
-	int ret; // Number of bytes read off the arduino
+    send_triangular_wave();
 
-	printf("\ntesting UART bus %d\n\n", arduino_bus);
-	// disable canonical (0), 1 stop bit (1), disable parity (0)
-	if (rc_uart_init(arduino_bus, BAUDRATE, TIMEOUT_S, 0, 1, 0))
-	{
-		printf("Failed to rc_uart_init%d\n", arduino_bus);
-		return -1;
-	}
-	printf("rc_uart_init%d inicialized\n", arduino_bus);
-
-	// *str[0] = '0';				// Start sending message as a zero
-	rc_uart_flush(arduino_bus); // Flush because we do not want trash into the communication line
-
-	// Communicate FOREVER!!!!
-	printf("Starting...\n");
-	while (1)
-	{
-		printf("Sending %d bytes: %s \n", strlen(str), str);
-		rc_uart_write(arduino_bus, (uint8_t *)str, strlen(str));
-
-		printf("Now it's time to read the answer:\n");
-		memset(buf, 0, sizeof(buf));
-		ret = rc_uart_read_bytes(arduino_bus, buf, ANSWER_SIZE); // We expect an OK from the arduino
-		if (ret < 0)
-		{
-			printf("Error reading Bus!\n");
-		}
-		else if (ret == 0)
-		{
-			printf("No answer from the arduino!\n");
-		}
-		else
-		{
-			printf("Answer was: %s\n", buf);
-		}
-
-		if (*str == '0')
-		{
-			str = "1";
-		}
-		else
-		{
-			str = "0";
-		}
-	}
-
-	// close
-	rc_uart_close(arduino_bus);
-	rc_remove_pid_file();
-	return 0;
+    save_to_file();
 }

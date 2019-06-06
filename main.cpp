@@ -15,13 +15,16 @@
 #include <cstdio>
 #include <iostream>
 #include <fstream>
+#include "communication.hpp"
 
 using namespace std;
 
 extern "C" {
     #include <rc/encoder.h>
+    #include <rc/encoder_eqep.h>
     #include <rc/time.h>
     #include <rc/adc.h>
+    #include <rc/pthread.h>
 }
 
 double input[SAMPLES];
@@ -71,8 +74,6 @@ void send_triangular_wave(){
 
         value = value + rate;
 
-        cout << value << endl;
-
         // Ugly simulation of period
         rc_usleep(int(PERIOD*1e6));
     }
@@ -92,21 +93,34 @@ void save_to_file(){
 }
 
 int main(){
-    cout << "Lembrou de usar pin-config em todos os pinos?" << endl;
+    cout << "Lembrou de usar config-pin em todos os pinos?" << endl;
 
-    // initialize all encoders, maybe we can initialize just the ones we are using?
-	if(rc_encoder_init()){
-		fprintf(stderr,"ERROR: failed to run rc_encoder_init\n");
+    if(rc_enable_signal_handler() == -1){
+        return -1;
+    }
+
+    // Threads
+    pthread_t comm_thread;
+
+    // initialize 3 main encoders, avoiding problems with PRU
+	if(rc_encoder_eqep_init()){
 		return -1;
 	}
 
     // Start voltage ADC reader
-    if(rc_adc_init()==-1) return -1;
+    if(rc_adc_init()==-1) 
+        return -1;
 
-    // Starts thread that sends info to the arduino
-    // Here goes the thread that calls the functions
+    // Starts thread that sends info to the arduino, SCHED_OTHER is the common RR
+    rc_pthread_create(&comm_thread, send_pwm, (void*)pwm_to_send, SCHED_OTHER, 0);
 
     send_triangular_wave();
 
+    rc_set_state(EXITING);
+
     save_to_file();
+
+    rc_encoder_eqep_cleanup();
+
+    rc_adc_cleanup();
 }

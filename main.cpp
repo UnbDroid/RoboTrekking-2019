@@ -10,22 +10,28 @@
  * strings this programs transmits will then loopback to the RX channel.
  */
 
+#include <iostream>
 #include <stdio.h>
-#include <string.h>
-#include <robotcontrol.h>
+#include <stdint.h>
+#include <string>
 
 using namespace std;
 
 extern "C"
 {
 #include <rc/uart.h>
+#include <rc/start_stop.h>
 }
 
 #define BUF_SIZE 32
 #define TIMEOUT_S 0.5
-#define BAUDRATE 9600
+#define BAUDRATE 115200
 #define MAX_SIZE 1
 #define ANSWER_SIZE 2
+#define PKG_SIZE
+
+#define RIGHT_MOTOR 35
+#define LEFT_MOTOR 45
 
 int main()
 {
@@ -38,9 +44,19 @@ int main()
 	}
 	rc_make_pid_file();
 
-	int arduino_bus = 1; // Bus to communicate with Arduino
+	int arduino_bus = 2; // Bus to communicate with Arduino
 
-	char *str = "0"; // Message to Arduino
+	// string str = "0"; // Message to Arduino
+
+	uint8_t rightMotor = RIGHT_MOTOR;
+	uint8_t leftMotor = LEFT_MOTOR;
+
+	if (rightMotor == 'd' || rightMotor == 'e')
+		rightMotor -= 1;
+	if (leftMotor == 'd' || leftMotor == 'e')
+		leftMotor -= 1;
+
+	char str[4] = {'d', rightMotor, 'e', leftMotor};
 
 	uint8_t buf[BUF_SIZE + 1];
 	int ret; // Number of bytes read off the arduino
@@ -73,20 +89,15 @@ int main()
 		}
 		else if (ret == 0)
 		{
-			printf("No answer from the arduino!\n");
+			printf("Not compatible string!\n");
+		}
+		else if (ret == 1)
+		{
+			printf("Compatible string!\n");
 		}
 		else
 		{
 			printf("Answer was: %s\n", buf);
-		}
-
-		if (*str == '0')
-		{
-			str = "1";
-		}
-		else
-		{
-			str = "0";
 		}
 	}
 

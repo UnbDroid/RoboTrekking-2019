@@ -2,6 +2,8 @@
 
 void* send_pwm(void *pwm){
 	int arduino_bus = 1; // Bus to communicate with Arduino
+    char str[8] = {'d', '0', '0', '0', 'e', '0', '0', '0'};
+    uint8_t leftMotor, rightMotor;
 
     // Casting
     uint8_t* pwms = (uint8_t*)pwm;
@@ -18,20 +20,20 @@ void* send_pwm(void *pwm){
 	}
 
     while(1){
-        uint8_t leftMotor = pwms[0];
-        uint8_t rightMotor = pwms[1];
+        leftMotor = pwms[0];
+        rightMotor = pwms[1];
 
-        if (rightMotor == uint8_t('d') || rightMotor == uint8_t('e'))
-            rightMotor -= 1;
-        if (leftMotor == uint8_t('d') || leftMotor == uint8_t('e'))
-            leftMotor -= 1;
-
-        char str[4] = {'d', char(rightMotor), 'e', char(leftMotor)};
+        str[1] = '0' + (leftMotor/100);
+        str[2] = '0' + (leftMotor%100)/10;
+        str[3] = '0' + (leftMotor%10);
+        str[5] = '0' + (rightMotor/100);
+        str[6] = '0' + (rightMotor%100)/10;
+        str[7] = '0' + (rightMotor%10);
 
         rc_uart_flush(arduino_bus); // Flush because we do not want trash into the communication line
 
-        rc_uart_write(arduino_bus, (uint8_t *)str, strlen(str));
-    
+        rc_uart_write(arduino_bus, (uint8_t *)str, 8);
+
         if(rc_get_state() == EXITING)
             break;
     }

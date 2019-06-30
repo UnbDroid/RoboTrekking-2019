@@ -6,14 +6,14 @@
 
 #define MAXIMUM_VOLTAGE 7
 #define MINIMUM_VOLTAGE 0
-#define SAMPLES 600
-#define N_PERIODS 3
+#define SAMPLES 10000
+#define N_PERIODS 4
 
 // 0 for square, 1 for triangular wave
 #define TRIANGULAR 1
 
 // Period of sampling in seconds
-#define PERIOD 0.02
+#define PERIOD 0.002
 
 #include <cstdio>
 #include <iostream>
@@ -152,7 +152,7 @@ void save_to_file(){
 }
 
 int main(){
-    cout << "Lembrou de usar pin-config em todos os pinos?" << endl;
+    cout << "Lembrou de usar config-pin em todos os pinos?" << endl;
 
     if(rc_enable_signal_handler() == -1){
         return -1;

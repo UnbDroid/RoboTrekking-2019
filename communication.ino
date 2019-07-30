@@ -24,13 +24,19 @@ void setup() {
 
 void loop() {
     
-    if(Serial.available() == 8){
-        Serial.readBytes(str, 8);
+    if(Serial.available() == 10){
+        Serial.readBytes(str, 10);
 
         // Sanity check
-        if(str[0] == 'd' && str[4] == 'e'){
-            motor_d_pwm = (str[1]-'0')*100 + (str[2]-'0')*10 + (str[3]-'0');
-            motor_e_pwm = (str[5]-'0')*100 + (str[6]-'0')*10 + (str[7]-'0');
+        if(str[0] == 'd' && str[5] == 'e'){
+            motor_d_pwm = (str[2]-'0')*100 + (str[3]-'0')*10 + (str[4]-'0');
+            if(str[1] == '-') {
+                motor_d_pwm = (motor_d_pwm)*(-1);
+            }
+            motor_e_pwm = (str[7]-'0')*100 + (str[8]-'0')*10 + (str[9]-'0');
+            if(str[6] == '-') {
+                motor_e_pwm = (motor_e_pwm)*(-1);
+            }
         }
 
         analogWrite(MOTOR_D, motor_d_pwm);

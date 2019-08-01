@@ -1,12 +1,22 @@
 #include "communication.hpp"
 
-void* send_pwm(void *pwm){
+void* send_pwm(int pwmR, int pwmL){
 	int arduino_bus = 1; // Bus to communicate with Arduino
-    char str[8] = {'d', '0', '0', '0', 'e', '0', '0', '0'};
+    char str[10] = {'d', '+', '0', '0', '0', 'e', '+', '0', '0', '0'};
     uint8_t leftMotor, rightMotor;
 
+    if(pwmR < 0){
+        str[1] = '-'
+        pwmR *= -1;
+    }
+    if(pwmL < 0){
+        str[6] = '-'
+        pwmL *= -1;
+    }
+
     // Casting
-    uint8_t* pwms = (uint8_t*)pwm;
+    uint8_t pwmsR = (uint8_t)pwmR;
+    uint8_t pwmsL = (uint8_t)pwmL;
 
     if(rc_enable_signal_handler() == -1){
         cout << "Could not start signal handler!" << endl;
@@ -20,15 +30,15 @@ void* send_pwm(void *pwm){
 	}
 
     while(1){
-        leftMotor = pwms[0];
-        rightMotor = pwms[1];
+        leftMotor = pwmsL;
+        rightMotor = pwmsR;
 
-        str[1] = '0' + (leftMotor/100);
-        str[2] = '0' + (leftMotor%100)/10;
-        str[3] = '0' + (leftMotor%10);
-        str[5] = '0' + (rightMotor/100);
-        str[6] = '0' + (rightMotor%100)/10;
-        str[7] = '0' + (rightMotor%10);
+        str[2] = '0' + (leftMotor/100);
+        str[3] = '0' + (leftMotor%100)/10;
+        str[4] = '0' + (leftMotor%10);
+        str[7] = '0' + (rightMotor/100);
+        str[8] = '0' + (rightMotor%100)/10;
+        str[9] = '0' + (rightMotor%10);
 
         rc_uart_flush(arduino_bus); // Flush because we do not want trash into the communication line
 

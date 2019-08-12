@@ -1,155 +1,46 @@
-#define ENCODER_L 2
-#define ENCODER_R 1
+#define ENCODER_L 1
+#define ENCODER_R 2
 
 #define MOTOR_LEFT 1<<0
 #define MOTOR_RIGHT 1<<1
 
 #define MAXIMUM_VOLTAGE 7
 #define MINIMUM_VOLTAGE 0
-#define SAMPLES 10000
-#define N_PERIODS 4
-
-// 0 for square, 1 for triangular wave
-#define TRIANGULAR 1
-
-// Period of sampling in seconds
-#define PERIOD 0.002
 
 #include <cstdio>
 #include <iostream>
 #include <fstream>
-#include "communication.hpp"
+#include "communication.h"
+
+#if 1
+    #include "controller.h"
+#else
+    #define MAIN_ID
+    #include "identification.h"
+#endif
 
 using namespace std;
 
 extern "C" {
+    #include <rc/start_stop.h>
     #include <rc/encoder.h>
     #include <rc/encoder_eqep.h>
     #include <rc/time.h>
-    #include <rc/adc.h>
     #include <rc/pthread.h>
 }
 
-double ts[SAMPLES];
-double input[SAMPLES];
-pair<double, double> outputs[SAMPLES];
+// Shared between low-level control and communication threads, holds the pwm value to be send to arduino
+volatile uint8_t pwm_to_send[2] = {0, 0};
 
-volatile uint8_t pwm_to_send[2];
+// Shared between low and high-level control threads, hold speed and angle error
+volatile double references[2] = {0, 0};
 
-uint8_t get_pwm_from_voltage(double x){
-    double input_voltage = rc_adc_dc_jack();
-
-    int value = 255*(x/input_voltage);
-
-    return (value > 255 ? 255 : uint8_t(value));
-}
-
-void motor_set_voltage(int motors, double voltage){
-    if(motors & MOTOR_LEFT)
-        pwm_to_send[0] = get_pwm_from_voltage(voltage);
-    
-    if(motors & MOTOR_RIGHT)
-        pwm_to_send[1] = get_pwm_from_voltage(voltage);
-}
-
-void send_triangular_wave(){
-    int i=0, out1, out2;
-    double value = MINIMUM_VOLTAGE;
-    double time = 0;
-
-    uint64_t nanos_since_boot = rc_nanos_since_boot(), temp;
-
-    double rate = (MAXIMUM_VOLTAGE-MINIMUM_VOLTAGE)/double(SAMPLES/(N_PERIODS*2));
-
-    for(;i<SAMPLES;i++){
-        if((value >= MAXIMUM_VOLTAGE) && (rate > 0)){
-            value = MAXIMUM_VOLTAGE;
-            rate = -rate;
-        }
-        else if((value <= MINIMUM_VOLTAGE) && (rate < 0)){
-            value = MINIMUM_VOLTAGE;
-            rate = -rate;
-        }
-
-        motor_set_voltage(MOTOR_LEFT|MOTOR_RIGHT, value);
-
-        out1 = rc_encoder_eqep_read(ENCODER_L);
-        out2 = rc_encoder_eqep_read(ENCODER_R);
-
-	    ts[i] = time;
-        input[i] = value;
-        outputs[i] = make_pair(out1, out2);
-
-        value = value + rate;
-
-        // Ugly simulation of period
-        rc_usleep(int(PERIOD*1e6));
-        
-        temp = rc_nanos_since_boot();
-        time += (temp-nanos_since_boot)/(double)1e9;
-        nanos_since_boot = temp;
-
-        if(rc_get_state() == EXITING)
-            break;
-    }
-}
-
-void send_square_wave(){
-    int i=0, out1, out2;
-    double value, time=0;
-
-    uint8_t state = 0;
-
-    uint32_t samples_per_cycle = SAMPLES/N_PERIODS;
-
-    uint64_t nanos_since_boot = rc_nanos_since_boot(), temp;
-
-    // Starts low and each half-cycle change it's state
-    for(;i<SAMPLES;i++){
-        if(state){
-            value = MAXIMUM_VOLTAGE;
-        }
-        else{
-            value = MINIMUM_VOLTAGE;
-        }
-
-        motor_set_voltage(MOTOR_LEFT|MOTOR_RIGHT, value);
-
-        out1 = rc_encoder_eqep_read(ENCODER_L);
-        out2 = rc_encoder_eqep_read(ENCODER_R);
-
-	    ts[i] = time;
-        input[i] = value;
-        outputs[i] = make_pair(out1, out2);
-
-        if(i%(samples_per_cycle/2) == 0){
-            state = (state+1)%2;
-        }
-
-        // Ugly simulation of period
-        rc_usleep(int(PERIOD*1e6));
-        
-        temp = rc_nanos_since_boot();
-        time += (temp-nanos_since_boot)/(double)1e9;
-        nanos_since_boot = temp;
-
-        if(rc_get_state() == EXITING)
-            break;
-    }
-}
-
-void save_to_file(){
-    uint i = 0;
-    
-    ofstream data_file;
-    data_file.open("data.txt");
-
-    for(;i<SAMPLES;i++){
-        data_file << ts[i] << "," << input[i] << "," << outputs[i].first << "," << outputs[i].second << endl;
-    }
-
-    data_file.close();
-}
+// Shared between low and high-level control threads and reading sensors thread, holds:
+//      0 -> Total distance walked
+//      1 -> Total angle displacement
+//      2 -> Speed of left motor
+//      3 -> Speed of right motor
+volatile double general_readings[4] = {0, 0, 0, 0};
 
 int main(){
     cout << "Lembrou de usar config-pin em todos os pinos?" << endl;
@@ -160,6 +51,7 @@ int main(){
 
     // Threads
     pthread_t comm_thread;
+    pthread_t control_thread;
 
     // initialize 3 main encoders, avoiding problems with PRU
 	if(rc_encoder_eqep_init()){
@@ -173,15 +65,32 @@ int main(){
     // Starts thread that sends info to the arduino, SCHED_OTHER is the common RR
     rc_pthread_create(&comm_thread, send_pwm, (void*)pwm_to_send, SCHED_OTHER, 0);
 
-    #if TRIANGULAR
-    send_triangular_wave();
-    #else
-    send_square_wave();
+
+    #ifdef MAIN_ID
+        // Use the same thread variable for simplicity
+        rc_pthread_create(&control_thread, generate_id_data, (void*)pwm_to_send, SCHED_OTHER, 0);
+    #else    
+        // Arguments for low-level control thread
+        controlArgs control_args;
+        control_args.arg_pwms = pwm_to_send;
+        control_args.arg_refs = references;
+        control_args.arg_spds = general_readings+2;
+
+        // Starts thread that controls the speed of the motors
+        rc_pthread_create(&control_thread, speed_control, (void*) &control_args, SCHED_OTHER, 0);
+
     #endif
 
-    rc_set_state(EXITING);
+    for(;;){
+        // Infinite loop to get ctrl-C and exit program
+        // Allows threads to run indefinitly
+        if(rc_get_state() == EXITING)
+            break;
+    }
 
-    save_to_file();
+    // The exiting is commanded by another thread
+
+    // rc_set_state(EXITING);
 
     rc_encoder_eqep_cleanup();
 

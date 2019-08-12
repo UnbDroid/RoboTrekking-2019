@@ -14,7 +14,7 @@ function [left_deadzone, right_deadzone] = analyze_data(name)
     for i = 2:range
         ts = (ts*(i-1)+(data(i,1)-data(i-1,1)))/i;
     end
-
+    
     % Conversao das leituras dos encoders para metro
     for i = 1:(range)
         data(i, 3) = abs( data(i, 3)*pi*diameter/CPR );

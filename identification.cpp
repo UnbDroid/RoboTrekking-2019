@@ -20,6 +20,7 @@ static void motor_set_voltage(int motors, double voltage, uint8_t *pwm_to_send){
         pwm_to_send[1] = get_pwm_from_voltage(voltage);
 }
 
+#ifdef ID_TRIANGULAR
 static void send_triangular_wave(uint8_t* pwms){
     int i=0, out1, out2;
     double value = MINIMUM_VOLTAGE;
@@ -41,6 +42,9 @@ static void send_triangular_wave(uint8_t* pwms){
 
         motor_set_voltage(MOTOR_LEFT|MOTOR_RIGHT, value, pwms);
 
+        // Sleep for some time so the communication thread can send the signals
+        rc_nanosleep(1e5);
+
         out1 = rc_encoder_eqep_read(ENCODER_L);
         out2 = rc_encoder_eqep_read(ENCODER_R);
 
@@ -51,7 +55,7 @@ static void send_triangular_wave(uint8_t* pwms){
         value = value + rate;
 
         // Ugly simulation of period
-        rc_usleep(int(PERIOD*1e6));
+        rc_nanosleep(int(PERIOD*1e9));
         
         temp = rc_nanos_since_boot();
         time += (temp-nanos_since_boot)/(double)1e9;
@@ -61,7 +65,9 @@ static void send_triangular_wave(uint8_t* pwms){
             break;
     }
 }
+#endif
 
+#ifdef ID_SQUARE
 static void send_square_wave(uint8_t *pwms){
     int i=0, out1, out2;
     double value, time=0;
@@ -105,6 +111,7 @@ static void send_square_wave(uint8_t *pwms){
             break;
     }
 }
+#endif
 
 static void save_to_file(){
     uint i = 0;
@@ -137,4 +144,6 @@ void* generate_id_data(void *arg){
     save_to_file();
 
     rc_set_state(EXITING);
+
+    return NULL;
 }

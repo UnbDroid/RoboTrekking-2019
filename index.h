@@ -7,8 +7,8 @@ using namespace std;
 
 class index{
     public:
-        index(uint32_t _limit, uint32_t start);
-        uint32_t idx(int32_t displacement);
+        index(uint32_t _limit, uint32_t start=0);
+        uint32_t idx(int32_t displacement=0);
         void set_pos(uint32_t _pos);
 
         index operator++(int32_t);

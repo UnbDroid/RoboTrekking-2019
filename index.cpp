@@ -2,12 +2,12 @@
 
 using namespace std;
 
-index::index(uint32_t _limit, uint32_t start=0){
+index::index(uint32_t _limit, uint32_t start){
     limit = _limit;
     pos = start;
 }
 
-uint32_t index::idx(int32_t displacement=0){
+uint32_t index::idx(int32_t displacement){
     if(displacement<0){
         displacement = -(-displacement%limit);
         return ( ((int32_t)pos+displacement < 0) ? limit + (pos+displacement) : pos+displacement );

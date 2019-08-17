@@ -4,6 +4,8 @@
 #define SAMPLES 10000
 #define N_PERIODS 4
 
+#include "main.h"
+
 // Choose between triangular or square identification signal
 #if 1
     #define ID_TRIANGULAR

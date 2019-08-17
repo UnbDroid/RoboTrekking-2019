@@ -8,8 +8,15 @@
 #define LEFT_DEADZONE_POS  1.8942
 #define RIGHT_DEADZONE_POS 1.8517
 
+// Right motor constants
+#define K_DIR 0.6068
+#define TAU_DIR 0.1334
+
 #include <stdint.h>
-#include "index.hpp"
+#include <cstdlib>
+#include <cmath>
+#include "main.h"
+#include "index.h"
 
 using namespace std;
 

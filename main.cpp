@@ -1,16 +1,9 @@
-#define ENCODER_L 1
-#define ENCODER_R 2
-
-#define MOTOR_LEFT 1<<0
-#define MOTOR_RIGHT 1<<1
-
-#define MAXIMUM_VOLTAGE 7
-#define MINIMUM_VOLTAGE 0
-
 #include <cstdio>
 #include <iostream>
 #include <fstream>
 #include "communication.h"
+#include "sensors.h"
+#include "main.h"
 
 #if 1
     #include "controller.h"
@@ -52,6 +45,7 @@ int main(){
     // Threads
     pthread_t comm_thread;
     pthread_t control_thread;
+    pthread_t sensors_thread;
 
     // initialize 3 main encoders, avoiding problems with PRU
 	if(rc_encoder_eqep_init()){
@@ -63,12 +57,13 @@ int main(){
         return -1;
 
     // Starts thread that sends info to the arduino, SCHED_OTHER is the common RR
-    rc_pthread_create(&comm_thread, send_pwm, (void*)pwm_to_send, SCHED_OTHER, 0);
-
+    if( rc_pthread_create(&comm_thread, send_pwm, (void*)pwm_to_send, SCHED_FIFO, 1) != 0){
+        cout << "Could not start communication thread!" << endl;
+    }
 
     #ifdef MAIN_ID
         // Use the same thread variable for simplicity
-        rc_pthread_create(&control_thread, generate_id_data, (void*)pwm_to_send, SCHED_OTHER, 0);
+        rc_pthread_create(&control_thread, generate_id_data, (void*)pwm_to_send, SCHED_FIFO, 2);
     #else    
         // Arguments for low-level control thread
         controlArgs control_args;
@@ -77,20 +72,26 @@ int main(){
         control_args.arg_spds = general_readings+2;
 
         // Starts thread that controls the speed of the motors
-        rc_pthread_create(&control_thread, speed_control, (void*) &control_args, SCHED_OTHER, 0);
+        rc_pthread_create(&control_thread, speed_control, (void*) &control_args, SCHED_FIFO, 2);
 
     #endif
+
+    if( rc_pthread_create(&sensors_thread, filter_sensors, (void*)general_readings, SCHED_FIFO, 2) != 0){
+        cout << "Could not start sensors thread!" << endl;
+    }
 
     for(;;){
         // Infinite loop to get ctrl-C and exit program
         // Allows threads to run indefinitly
+        //cout << general_readings[1] << endl;
+
         if(rc_get_state() == EXITING)
             break;
     }
 
     // The exiting is commanded by another thread
 
-    // rc_set_state(EXITING);
+    rc_set_state(EXITING);
 
     rc_encoder_eqep_cleanup();
 

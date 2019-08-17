@@ -1,4 +1,4 @@
-#include "controller.hpp"
+#include "controller.h"
 
 using namespace std;
 
@@ -32,7 +32,7 @@ static double saturate(double voltage){
     if(voltage > MAXIMUM_VOLTAGE)
         voltage = MAXIMUM_VOLTAGE;
     else if(voltage < MINIMUM_VOLTAGE)
-        voltage = MINIMUM_VOLTAGE
+        voltage = MINIMUM_VOLTAGE;
 
     return voltage;
 }
@@ -40,7 +40,6 @@ static double saturate(double voltage){
 void* speed_control(void *args){
 
     if(rc_enable_signal_handler() == -1){
-        cout << "Could not start signal handler!" << endl;
         return NULL;
     }
 
@@ -51,13 +50,16 @@ void* speed_control(void *args){
     controlArgs* control_arguments = (controlArgs*)args;
     volatile uint8_t* pwms = (volatile uint8_t*)control_arguments->arg_pwms;
     volatile double* refs = (volatile double*)control_arguments->arg_refs;
-    volatile double* readings = (volatile double*)control_arguments->arg_sensors;
+    volatile double* readings = (volatile double*)control_arguments->arg_spds;
 
     // Round arrays
     double err_left[3] = {0, 0, 0},
            err_right[3] = {0, 0, 0},
            u_left[3] = {0, 0, 0},
            u_right[3] = {0, 0, 0};
+
+    // Variables used because the encoder is not working properly
+    double final_speed, actual_speed = 0;
 
     // Special kind of index
     index control_idx = index(3);
@@ -70,7 +72,7 @@ void* speed_control(void *args){
         err_left[control_idx.idx()] = refs[0] - readings[MOTOR_LEFT];
         
         //   Control signal calculation
-        u_left[control_idx.idx()] = 0.4806*err_left[control_idx.idx(-2)] + 0.4*u_left[control_idx.idx(-1)] + 0.6*u_left[control_idx.idx(-2)]
+        u_left[control_idx.idx()] = 0.4806*err_left[control_idx.idx(-2)] + 0.4*u_left[control_idx.idx(-1)] + 0.6*u_left[control_idx.idx(-2)];
 
         //   Deadzone compensation
         left_voltage = anti_dz(u_left[control_idx.idx()], LEFT_DEADZONE_POS);
@@ -80,10 +82,24 @@ void* speed_control(void *args){
 
         // Right motor control
         //   Error calculation
-        err_right[control_idx.idx()] = refs[0] - readings[MOTOR_RIGHT];
+        //   
+        //  Given that the right encoder is not working, we will estimate the speed
+        // err_right[control_idx.idx()] = refs[0] - readings[MOTOR_RIGHT];
         
+        final_speed = K_DIR*u_right[control_idx.idx(-1)];
+
+        // If it's the first measure
+        if( abs(u_right[control_idx.idx(-1)] - u_right[control_idx.idx(-2)]) < 1e-4 ){
+            actual_speed = final_speed + (actual_speed - final_speed)*exp(-PERIOD/TAU_DIR);
+        }
+        else {
+            actual_speed = final_speed;
+        };
+
+        err_right[control_idx.idx()] = refs[0] - actual_speed;
+
         //   Control signal calculation
-        u_right[control_idx.idx()] = 0.4373*err_right[control_idx.idx(-2)] + 0.5075*u_right[control_idx.idx(-1)] + 0.4925*u_right[control_idx.idx(-2)]
+        u_right[control_idx.idx()] = 0.4373*err_right[control_idx.idx(-2)] + 0.5075*u_right[control_idx.idx(-1)] + 0.4925*u_right[control_idx.idx(-2)];
 
         //   Deadzone compensation
         right_voltage = anti_dz(u_right[control_idx.idx()], RIGHT_DEADZONE_POS);
@@ -92,8 +108,8 @@ void* speed_control(void *args){
         right_voltage = saturate(right_voltage);
 
         // Update PWM to be sent to arduino
-        motor_set_voltage(MOTOR_LEFT, left_voltage);
-        motor_set_voltage(MOTOR_RIGHT, right_voltage);
+        motor_set_voltage(MOTOR_LEFT, left_voltage, pwms);
+        motor_set_voltage(MOTOR_RIGHT, right_voltage, pwms);
 
         rc_usleep(PERIOD*1000);
         

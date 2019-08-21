@@ -2,7 +2,7 @@
 #define CONTROLLER_H_
 
 // Period of controller
-#define PERIOD 0.2
+#define CONTROLLER_PERIOD 0.2
 
 // Deadzone values
 #define LEFT_DEADZONE_POS  1.8942
@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <cmath>
+#include <iostream>
 #include "main.h"
 #include "index.h"
 

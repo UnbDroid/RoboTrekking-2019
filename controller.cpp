@@ -67,9 +67,12 @@ void* speed_control(void *args){
     // TODO: Insert control with angle error, refs[1]
 
     for(;;){
+        // Test: remove later
+        cout << "Leituras:\n\t L: " << readings[INDEX_LEFT] << "\n\t R: " << readings[INDEX_RIGHT] << endl;
+
         // Left motor control
         //   Error calculation
-        err_left[control_idx.idx()] = refs[0] - readings[MOTOR_LEFT];
+        err_left[control_idx.idx()] = refs[0] - readings[INDEX_LEFT];
         
         //   Control signal calculation
         u_left[control_idx.idx()] = 0.4806*err_left[control_idx.idx(-2)] + 0.4*u_left[control_idx.idx(-1)] + 0.6*u_left[control_idx.idx(-2)];
@@ -90,11 +93,13 @@ void* speed_control(void *args){
 
         // If it's the first measure
         if( abs(u_right[control_idx.idx(-1)] - u_right[control_idx.idx(-2)]) < 1e-4 ){
-            actual_speed = final_speed + (actual_speed - final_speed)*exp(-PERIOD/TAU_DIR);
+            actual_speed = final_speed + (actual_speed - final_speed)*exp(-CONTROLLER_PERIOD/TAU_DIR);
         }
         else {
             actual_speed = final_speed;
         };
+
+        cout << "Simulacao direita: " << actual_speed << endl;
 
         err_right[control_idx.idx()] = refs[0] - actual_speed;
 
@@ -107,11 +112,19 @@ void* speed_control(void *args){
         //   Saturation
         right_voltage = saturate(right_voltage);
 
+        // Test: remove later
+        cout << "Erro:\n\t L: " << err_left[control_idx.idx()] << "\n\t R: " << err_right[control_idx.idx()] << endl;
+
+        // Test: remove later
+        cout << "Tensao:\n\t L: " << left_voltage << "\n\t R: " << right_voltage << endl;
+
+        control_idx++;
+
         // Update PWM to be sent to arduino
         motor_set_voltage(MOTOR_LEFT, left_voltage, pwms);
         motor_set_voltage(MOTOR_RIGHT, right_voltage, pwms);
 
-        rc_usleep(PERIOD*1000);
+        rc_usleep(CONTROLLER_PERIOD*1000);
         
         if(rc_get_state() == EXITING)
             break;

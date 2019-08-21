@@ -7,6 +7,9 @@
 #define MOTOR_LEFT 1<<0
 #define MOTOR_RIGHT 1<<1
 
+#define INDEX_LEFT  0
+#define INDEX_RIGHT 1
+
 #define MAXIMUM_VOLTAGE 7
 #define MINIMUM_VOLTAGE 0
 

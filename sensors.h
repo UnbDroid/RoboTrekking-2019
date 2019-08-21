@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <cmath>
-#include <iostream>
 #include "index.h"
 
 extern "C" {

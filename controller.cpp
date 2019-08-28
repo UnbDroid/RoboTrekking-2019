@@ -45,35 +45,65 @@ void* speed_control(void *args){
 
     // Values to be sent to motor
     double left_voltage = 0, right_voltage = 0;
-
+    
     // Castings
     controlArgs* control_arguments = (controlArgs*)args;
-    volatile uint8_t* pwms = (volatile uint8_t*)control_arguments->arg_pwms;
-    volatile double* refs = (volatile double*)control_arguments->arg_refs;
-    volatile double* readings = (volatile double*)control_arguments->arg_spds;
+    volatile uint8_t* pwms = control_arguments->arg_pwms;
+    volatile double* refs = control_arguments->arg_refs;
+    volatile double* readings = control_arguments->arg_spds;
 
-    // Round arrays
+    // Sync
+    mutex* sensors_mutex = control_arguments->arg_sensors_mutex;
+    condition_variable* sensors_cv = control_arguments->arg_sensors_cv;
+
+    // Round arrays for control calculations
     double err_left[3] = {0, 0, 0},
            err_right[3] = {0, 0, 0},
            u_left[3] = {0, 0, 0},
            u_right[3] = {0, 0, 0};
 
-    // Variables used because the encoder is not working properly
-    double final_speed, actual_speed = 0;
+    // Save readings into local variables for ease of synchronization
+    double speed[2];
+
+    // Variables used because the encoder readings are not working properly
+    double final_speed[2], actual_speed[2] = {0.0, 0.0};
 
     // Special kind of index
-    index control_idx = index(3);
+    index control_idx(3);
+
+    // Sync with sensors thread
+    unique_lock<mutex> sensors_lock(*sensors_mutex);
+    sensors_cv->wait(sensors_lock);
+    sensors_lock.unlock();
 
     // TODO: Insert control with angle error, refs[1]
 
     for(;;){
-        // Test: remove later
-        cout << "Leituras:\n\t L: " << readings[INDEX_LEFT] << "\n\t R: " << readings[INDEX_RIGHT] << endl;
+
+        // Safely get readings of sensors
+        sensors_lock.lock();
+
+        speed[INDEX_LEFT] = readings[INDEX_LEFT];
+        speed[INDEX_RIGHT] = readings[INDEX_RIGHT];
+
+        sensors_lock.unlock();
+
+        final_speed[INDEX_LEFT] = K_LEFT*u_left[control_idx.idx(-1)];
+
+        // If it's the first measure from last change of output
+        if( abs(u_left[control_idx.idx(-1)] - u_left[control_idx.idx(-2)]) < 1e-4 ){
+            actual_speed[INDEX_LEFT] = final_speed[INDEX_LEFT] + (actual_speed[INDEX_LEFT] - final_speed[INDEX_LEFT])*exp(-CONTROLLER_PERIOD/TAU_LEFT);
+        }
+        else {
+            actual_speed[INDEX_LEFT] = final_speed[INDEX_LEFT];
+        };
 
         // Left motor control
         //   Error calculation
-        err_left[control_idx.idx()] = refs[0] - readings[INDEX_LEFT];
-        
+        //err_left[control_idx.idx()] = refs[0] - speed[INDEX_LEFT];
+
+        err_left[control_idx.idx()] = refs[0] - actual_speed[INDEX_LEFT];
+
         //   Control signal calculation
         u_left[control_idx.idx()] = 0.4806*err_left[control_idx.idx(-2)] + 0.4*u_left[control_idx.idx(-1)] + 0.6*u_left[control_idx.idx(-2)];
 
@@ -83,25 +113,25 @@ void* speed_control(void *args){
         //   Saturation
         left_voltage = saturate(left_voltage);
 
+        cout << control_idx.idx() << ' ' << speed[INDEX_LEFT] << ' ' << err_left[control_idx.idx()] << ' ' <<  actual_speed[INDEX_LEFT] << ' ' << u_left[control_idx.idx()] << endl;
+
         // Right motor control
         //   Error calculation
         //   
         //  Given that the right encoder is not working, we will estimate the speed
-        // err_right[control_idx.idx()] = refs[0] - readings[MOTOR_RIGHT];
+        // err_right[control_idx.idx()] = refs[0] - speed[MOTOR_RIGHT];
         
-        final_speed = K_DIR*u_right[control_idx.idx(-1)];
+        final_speed[INDEX_RIGHT] = K_DIR*u_right[control_idx.idx(-1)];
 
         // If it's the first measure
         if( abs(u_right[control_idx.idx(-1)] - u_right[control_idx.idx(-2)]) < 1e-4 ){
-            actual_speed = final_speed + (actual_speed - final_speed)*exp(-CONTROLLER_PERIOD/TAU_DIR);
+            actual_speed[INDEX_RIGHT] = final_speed[INDEX_RIGHT] + (actual_speed[INDEX_RIGHT] - final_speed[INDEX_RIGHT])*exp(-CONTROLLER_PERIOD/TAU_DIR);
         }
         else {
-            actual_speed = final_speed;
+            actual_speed[INDEX_RIGHT] = final_speed[INDEX_RIGHT];
         };
 
-        cout << "Simulacao direita: " << actual_speed << endl;
-
-        err_right[control_idx.idx()] = refs[0] - actual_speed;
+        err_right[control_idx.idx()] = refs[0] - actual_speed[INDEX_RIGHT];
 
         //   Control signal calculation
         u_right[control_idx.idx()] = 0.4373*err_right[control_idx.idx(-2)] + 0.5075*u_right[control_idx.idx(-1)] + 0.4925*u_right[control_idx.idx(-2)];
@@ -112,19 +142,13 @@ void* speed_control(void *args){
         //   Saturation
         right_voltage = saturate(right_voltage);
 
-        // Test: remove later
-        cout << "Erro:\n\t L: " << err_left[control_idx.idx()] << "\n\t R: " << err_right[control_idx.idx()] << endl;
-
-        // Test: remove later
-        cout << "Tensao:\n\t L: " << left_voltage << "\n\t R: " << right_voltage << endl;
-
         control_idx++;
 
         // Update PWM to be sent to arduino
         motor_set_voltage(MOTOR_LEFT, left_voltage, pwms);
-        motor_set_voltage(MOTOR_RIGHT, right_voltage, pwms);
+        //motor_set_voltage(MOTOR_RIGHT, right_voltage, pwms);
 
-        rc_usleep(CONTROLLER_PERIOD*1000);
+        rc_usleep(CONTROLLER_PERIOD*1e6);
         
         if(rc_get_state() == EXITING)
             break;

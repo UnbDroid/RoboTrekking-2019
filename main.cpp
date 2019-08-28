@@ -1,11 +1,12 @@
-#include <cstdio>
 #include <iostream>
-#include <fstream>
+#include <stdint.h>
+#include <mutex>
+#include <condition_variable>
 #include "communication.h"
 #include "sensors.h"
 #include "main.h"
 
-#if 0
+#if 1
     #include "controller.h"
 #else
     #define MAIN_ID
@@ -22,21 +23,27 @@ extern "C" {
     #include <rc/pthread.h>
 }
 
-// Shared between low-level control and communication threads, holds the pwm value to be send to arduino
-volatile uint8_t pwm_to_send[2] = {0, 0};
-
-// Shared between low and high-level control threads, hold speed and angle error
-volatile double references[2] = {1, 0};
-
-// Shared between low and high-level control threads and reading sensors thread, holds:
-//      0 -> Total distance walked
-//      1 -> Total angle displacement
-//      2 -> Speed of left motor
-//      3 -> Speed of right motor
-volatile double general_readings[4] = {0.0, 0.0, 0.0, 0.0};
-
 int main(){
     cout << "Lembrou de usar config-pin em todos os pinos?" << endl;
+
+    /* Shared variables */
+
+    // Shared between low-level control and communication threads, holds the pwm value to be send to arduino
+    volatile uint8_t pwm_to_send[2] = {0, 0};
+
+    // Shared between low and high-level control threads, hold speed and angle error
+    volatile double references[2] = {1, 0};
+
+    // Shared between low and high-level control threads and reading sensors thread, holds:
+    //      0 -> Total distance walked
+    //      1 -> Total angle displacement
+    //      2 -> Speed of left motor
+    //      3 -> Speed of right motor
+    volatile double general_readings[4] = {0.0, 0.0, 0.0, 0.0};
+
+    /* Variables for synchronization */
+    mutex control_sensors_mutex;
+    condition_variable control_sensors_cv;
 
     if(rc_enable_signal_handler() == -1){
         return -1;
@@ -67,19 +74,26 @@ int main(){
     #else    
         // Arguments for low-level control thread
         controlArgs control_args;
-        control_args.arg_pwms = pwm_to_send;
-        control_args.arg_refs = references;
-        control_args.arg_spds = &general_readings[2];
+        control_args.arg_pwms = (uint8_t*)pwm_to_send;
+        control_args.arg_refs = (double*)references;
+        control_args.arg_spds = (double*)&general_readings[2];
+        control_args.arg_sensors_mutex = &control_sensors_mutex;
+        control_args.arg_sensors_cv = &control_sensors_cv;
 
         // Starts thread that controls the speed of the motors
         rc_pthread_create(&control_thread, speed_control, (void*) &control_args, SCHED_FIFO, 3);
 
+        // Arguments for sensors thread
+        sensorsArgs sensors_args;
+        sensors_args.arg_readings = (double*)general_readings;
+        sensors_args.arg_control_mutex = &control_sensors_mutex;
+        sensors_args.arg_control_cv = &control_sensors_cv;
+
         // Sensors thread initialization
-        if( rc_pthread_create(&sensors_thread, filter_sensors, (void*)general_readings, SCHED_FIFO, 2) != 0){
+        if( rc_pthread_create(&sensors_thread, filter_sensors, (void*)&sensors_args, SCHED_FIFO, 2) != 0){
             cout << "Could not start sensors thread!" << endl;
         }
     #endif
-
 
     for(;;){
         // Infinite loop to get ctrl-C and exit program

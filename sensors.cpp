@@ -1,5 +1,4 @@
 #include "sensors.h"
-#include "main.h"
 
 using namespace std;
 
@@ -27,7 +26,12 @@ void* filter_sensors(void *arg){
     }
 
     // Castings
-    volatile double* readings = (volatile double*)arg;
+    sensorsArgs* args = (sensorsArgs*)arg;
+    volatile double* readings = (double*)args->arg_readings;
+
+    // Sync variables
+    mutex* control_mutex = args->arg_control_mutex;
+    condition_variable* control_cv = args->arg_control_cv;
 
     // Speed related variables
     double  enc_l[2] = {0, 0},
@@ -38,12 +42,17 @@ void* filter_sensors(void *arg){
     double exp_result;
 
     // Special kind of index
-    index speed_idx = index(2, 0);
-    index enc_idx = index(2, 0);
+    index speed_idx(2, 0);
+    index enc_idx(2, 0);
 
     // MPU start
     rc_mpu_data_t mpu_data;
     start_mpu(&mpu_data);
+
+    // Sync
+    unique_lock<mutex> control_lock(*control_mutex);
+    control_cv->notify_one();
+    control_lock.unlock();
 
     // Time variables
     uint64_t time_spd, time_ref_spd = rc_nanos_since_boot();
@@ -75,13 +84,19 @@ void* filter_sensors(void *arg){
 
                 exp_result = exp(-30.0*((time_spd - time_ref_spd)/1e9));
 
-                vel_l[speed_idx.idx()] = 30*enc_l[enc_idx.idx()] - 30*enc_l[enc_idx.idx(-1)] + exp_result*vel_l[speed_idx.idx(-1)];
+                vel_l[speed_idx.idx()] = 30*(enc_l[enc_idx.idx()] - enc_l[enc_idx.idx(-1)]) + exp_result*vel_l[speed_idx.idx(-1)];
                 vel_r[speed_idx.idx()] = 30*enc_r[enc_idx.idx()] - 30*enc_r[enc_idx.idx(-1)] + exp_result*vel_r[speed_idx.idx(-1)];
 
+                // Lock for safety updating
+                control_lock.lock();
+
                 // Update arguments
-                readings[2] = vel_l[speed_idx.idx()];
-                readings[3] = vel_r[speed_idx.idx()];
-                
+                readings[2] = vel_l[enc_idx.idx()];
+                readings[3] = vel_r[enc_idx.idx()]; 
+            
+                // Unlock
+                control_lock.unlock();
+
                 // Increment index
                 speed_idx++;
             }
@@ -97,10 +112,10 @@ void* filter_sensors(void *arg){
 
         // Integrate gyro and store into readings[1], integration done by mpu dmp mode
         //      degrees (º)
-        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+        //readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
         
         // Sleep for some time
-        rc_usleep(10);
+        rc_usleep(50);
 
         if(rc_get_state() == EXITING)
             break;    

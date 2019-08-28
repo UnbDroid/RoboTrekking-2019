@@ -8,7 +8,10 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <cmath>
+#include <mutex>
+#include <condition_variable>
 #include "index.h"
+#include "main.h"
 
 extern "C" {
     #include <rc/start_stop.h>
@@ -20,11 +23,19 @@ extern "C" {
 
 using namespace std;
 
-// Parameter: double array with 4 positions:
-//      0 -> Total distance walked
-//      1 -> Total angle displacement
-//      2 -> Speed of left motor
-//      3 -> Speed of right motor
+// Arguments for sensors thread:
+//      arg_readings -> 4 array of double:
+//                          [0] -> Total distance walked
+//                          [1] -> Total angle displacement
+//                          [2] -> Speed of left motor
+//                          [3] -> Speed of right motor                              
+//      arg_control_mutex -> Mutex to sync with control thread
+//      arg_control_cv -> Sync with control thread
+typedef struct sensors_thread_args{
+    double* arg_readings;
+    mutex* arg_control_mutex;
+    condition_variable* arg_control_cv;
+}sensorsArgs;
 
 void* filter_sensors(void *arg);
 

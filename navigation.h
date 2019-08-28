@@ -2,7 +2,12 @@
 #define NAVIGATION_H_
 
 // Period of navigation
-#define PERIOD 0.2
+#define NAVIGATION_PERIOD 0.2
+
+#define DISTANCE_TO_START_GO_AROUND 1.0 //meters
+#define OFFSET_ANGLE_TO_START_CIRCLE 20.0
+#define ANGLE_TO_GO_AROUND 90.0
+#define DISTANCE_TO_GO_AROUND 1.0 //meters
 
 // Speed (m/s)
 #define MAX_SPEED       3
@@ -26,7 +31,7 @@ enum State{
     GO_TO_FIRST,
     GO_TO_SECOND,
     GO_TO_LAST,
-    GO_ROUND,
+    GO_AROUND,
     DODGE,
     END
 };

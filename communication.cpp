@@ -1,44 +1,36 @@
-#include "communication.hpp"
+#include "communication.h"
 
-void* send_pwm(int pwmR, int pwmL){
+void* send_pwm(void *pwm){
 	int arduino_bus = 1; // Bus to communicate with Arduino
-    char str[10] = {'d', '+', '0', '0', '0', 'e', '+', '0', '0', '0'};
+    char str[8] = {'*', '0', '0', '0', '*', '0', '0', '0'}; // The ones left with '*' can be either a letter or a number
     uint8_t leftMotor, rightMotor;
 
-    if(pwmR < 0){
-        str[1] = '-'
-        pwmR *= -1;
-    }
-    if(pwmL < 0){
-        str[6] = '-'
-        pwmL *= -1;
-    }
-
     // Casting
-    uint8_t pwmsR = (uint8_t)pwmR;
-    uint8_t pwmsL = (uint8_t)pwmL;
+    uint8_t* pwms = (uint8_t*)pwm;
 
     if(rc_enable_signal_handler() == -1){
-        cout << "Could not start signal handler!" << endl;
         return NULL;
     }
 
 	// disable canonical (0), 1 stop bit (1), disable parity (0)
 	if (rc_uart_init(arduino_bus, BAUDRATE, TIMEOUT_S, 0, 1, 0)){
-		cout << "Failed to rc_uart_init" << endl;
 		return NULL;
 	}
 
-    while(1){
-        leftMotor = pwmsL;
-        rightMotor = pwmsR;
+    // Start string to send, the one that is zero is the first to be sent
+    str[0] = 'e'*((INDEX_LEFT + 1)%2) + 'd'*((INDEX_RIGHT + 1)%2);
+    str[4] = 'e'*INDEX_LEFT + 'd'*INDEX_RIGHT;
 
-        str[2] = '0' + (leftMotor/100);
-        str[3] = '0' + (leftMotor%100)/10;
-        str[4] = '0' + (leftMotor%10);
-        str[7] = '0' + (rightMotor/100);
-        str[8] = '0' + (rightMotor%100)/10;
-        str[9] = '0' + (rightMotor%10);
+    for(;;){
+        leftMotor = pwms[INDEX_LEFT];
+        rightMotor = pwms[INDEX_RIGHT];
+
+        str[4*INDEX_LEFT + 1] = '0' + (leftMotor/100);
+        str[4*INDEX_LEFT + 3] = '0' + (leftMotor%10);
+        str[4*INDEX_LEFT + 2] = '0' + (leftMotor%100)/10;
+        str[4*INDEX_RIGHT + 1] = '0' + (rightMotor/100);
+        str[4*INDEX_RIGHT + 2] = '0' + (rightMotor%100)/10;
+        str[4*INDEX_RIGHT + 3] = '0' + (rightMotor%10);
 
         rc_uart_flush(arduino_bus); // Flush because we do not want trash into the communication line
 
@@ -48,7 +40,7 @@ void* send_pwm(int pwmR, int pwmL){
             break;
     }
 
-	// close cleanly
+	// Close cleanly
 	rc_uart_close(arduino_bus);
 	return NULL;
 }

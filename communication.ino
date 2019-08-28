@@ -1,10 +1,7 @@
 #define MOTOR_D 6
 #define MOTOR_E 9
 
-byte motor_d_pwm = 0;
-byte motor_e_pwm = 0;
-
-byte str[4];
+byte motor, count, pwm, read_char;
 
 unsigned long time;
 
@@ -19,29 +16,44 @@ void setup() {
     digitalWrite(7, HIGH);
     digitalWrite(8, LOW);
 
+    count = 0;
+    pwm = 0;
+
     time = millis();
 }
 
 void loop() {
     
-    if(Serial.available() == 10){
-        Serial.readBytes(str, 10);
+    if(Serial.available()){
+        read_char = Serial.read();
 
-        // Sanity check
-        if(str[0] == 'd' && str[5] == 'e'){
-            motor_d_pwm = (str[2]-'0')*100 + (str[3]-'0')*10 + (str[4]-'0');
-            if(str[1] == '-') {
-                motor_d_pwm = (motor_d_pwm)*(-1);
+        if(count){
+            if(read_char > '9' || read_char < '0'){
+                count = 0;
+                pwm = 0;
             }
-            motor_e_pwm = (str[7]-'0')*100 + (str[8]-'0')*10 + (str[9]-'0');
-            if(str[6] == '-') {
-                motor_e_pwm = (motor_e_pwm)*(-1);
+            else {
+                pwm = pwm + count*(read_char - '0');
+                count = count/10;
+
+                if(!count){
+                    if(motor == 'd'){
+                        analogWrite(MOTOR_D, pwm);
+                    }
+                    else if(motor == 'e'){
+                        analogWrite(MOTOR_E, pwm);
+                    }
+                    pwm = 0;
+                }
             }
         }
 
-        analogWrite(MOTOR_D, motor_d_pwm);
-        analogWrite(MOTOR_E, motor_e_pwm);
-        
+        // Not inside an 'else' for resetting count even if lost some bytes 
+        if(read_char == 'd' || read_char == 'e'){
+            motor = read_char;
+            count = 100;
+        }
+   
         time = millis();
     }
     else if( (millis()-time) > 3*1e3 ){

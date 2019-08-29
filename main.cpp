@@ -32,7 +32,7 @@ int main(){
     volatile uint8_t pwm_to_send[2] = {0, 0};
 
     // Shared between low and high-level control threads, hold speed and angle error
-    volatile double references[2] = {1, 0};
+    volatile double references[2] = {1.5, 0};
 
     // Shared between low and high-level control threads and reading sensors thread, holds:
     //      0 -> Total distance walked

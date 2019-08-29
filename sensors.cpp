@@ -33,6 +33,7 @@ void* filter_sensors(void *arg){
     mutex* control_mutex = args->arg_control_mutex;
     condition_variable* control_cv = args->arg_control_cv;
 
+    #if USING_ENCODER
     // Speed related variables
     double  enc_l[2] = {0, 0},
             enc_r[2] = {0, 0},
@@ -44,6 +45,10 @@ void* filter_sensors(void *arg){
     // Special kind of index
     index speed_idx(2, 0);
     index enc_idx(2, 0);
+    
+    // Time variables
+    uint64_t time_spd, time_ref_spd = rc_nanos_since_boot();
+    #endif
 
     // MPU start
     rc_mpu_data_t mpu_data;
@@ -54,13 +59,11 @@ void* filter_sensors(void *arg){
     control_cv->notify_one();
     control_lock.unlock();
 
-    // Time variables
-    uint64_t time_spd, time_ref_spd = rc_nanos_since_boot();
-
     // TODO: Insert tap into gyro
 
     for(;;){
 
+        #if USING_ENCODER
         // Get time of readings
         time_spd = rc_nanos_since_boot();
 
@@ -106,13 +109,14 @@ void* filter_sensors(void *arg){
             // Update reference of time
             time_ref_spd = time_spd;
         }
+        #endif
 
         // Integrate accelerometer and encoders result and save into readings[0]
         //      meters (m)
 
         // Integrate gyro and store into readings[1], integration done by mpu dmp mode
         //      degrees (º)
-        //readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
         
         // Sleep for some time
         rc_usleep(50);

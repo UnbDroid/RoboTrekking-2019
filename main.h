@@ -13,4 +13,6 @@
 #define MAXIMUM_VOLTAGE 7
 #define MINIMUM_VOLTAGE 0
 
+#define USING_ENCODER 0
+
 #endif

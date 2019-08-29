@@ -2,10 +2,22 @@
 
 using namespace std;
 
+volatile double gyro_error = 0, gyro_time, last_gyro, new_gyro;
+volatile double gyro_offset = 0;
+
+// Time variables
+volatile uint64_t time_spd = 0, time_ref_spd = 0;
+
 // Start MPU and return struct from where we can pool the data
 static void start_mpu(rc_mpu_data_t* mpu_data){
     // MPU configuration struct
     rc_mpu_config_t mpu_config = rc_mpu_default_config();
+
+    // Calibrate gyro
+    if(rc_mpu_calibrate_gyro_routine(config)<0){
+        printf("Failed to complete gyro calibration\n");
+        return -1;
+    }
 
     // Special configuration of config for dmp
 	mpu_config.dmp_auto_calibrate_gyro = 0;
@@ -13,11 +25,22 @@ static void start_mpu(rc_mpu_data_t* mpu_data){
     mpu_config.dmp_interrupt_sched_policy = SCHED_FIFO;
     mpu_config.dmp_interrupt_priority = 1;
 
+    // time_ref_spd = rc_nanos_since_boot();
+    // last_gyro = data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+    // time_spd = rc_nanos_since_boot();
+    // new_gyro = data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+    // gyro_error = last_gyro - new_gyro
+    // gyro_time = time_spd - time_spd;
+
     rc_mpu_initialize_dmp(mpu_data, mpu_config);
 }
 
 static void mpu_turnoff(void){
     rc_mpu_power_off();
+}
+
+static void handle_gyro_error(void){
+    gyro_offset += gyro_error;
 }
 
 void* filter_sensors(void *arg){
@@ -54,15 +77,16 @@ void* filter_sensors(void *arg){
     control_cv->notify_one();
     control_lock.unlock();
 
-    // Time variables
-    uint64_t time_spd, time_ref_spd = rc_nanos_since_boot();
-
-    // TODO: Insert tap into gyro
+    time_ref_spd = rc_nanos_since_boot();
 
     for(;;){
 
         // Get time of readings
         time_spd = rc_nanos_since_boot();
+
+        // Correct gyro error
+        if((time_spd - time_ref_spd) gyro_time)
+            rc_mpu_set_dmp_callback(&handle_gyro_error);
 
         // 0.002 seconds
         if( (time_spd - time_ref_spd) > 2000 ){ 
@@ -112,7 +136,7 @@ void* filter_sensors(void *arg){
 
         // Integrate gyro and store into readings[1], integration done by mpu dmp mode
         //      degrees (º)
-        //readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
         
         // Sleep for some time
         rc_usleep(50);

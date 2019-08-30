@@ -30,6 +30,14 @@ static void start_mpu(rc_mpu_data_t* mpu_data){
     mpu_config.dmp_interrupt_sched_policy = SCHED_FIFO;
     mpu_config.dmp_interrupt_priority = 1;
 
+    rc_mpu_initialize_dmp(mpu_data, mpu_config);
+}
+
+static void mpu_turnoff(void){
+    rc_mpu_power_off();
+}
+
+static void calculate_gyro_error(){
     for (size_t i = ; i <= COUNT_GYRO; i++)
     {
         gyro_readings.push_back(data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;);
@@ -37,7 +45,7 @@ static void start_mpu(rc_mpu_data_t* mpu_data){
 
     for (double value:gyro_readings)
     {
-        if(last_gyro == 0)
+        if(last_gyro == 0.0)
             last_gyro = value;
         
         else{
@@ -47,12 +55,6 @@ static void start_mpu(rc_mpu_data_t* mpu_data){
     }
     
     gyro_error /= COUNT_GYRO;
-
-    rc_mpu_initialize_dmp(mpu_data, mpu_config);
-}
-
-static void mpu_turnoff(void){
-    rc_mpu_power_off();
 }
 
 static void handle_gyro_error(void){
@@ -94,6 +96,9 @@ void* filter_sensors(void *arg){
     // MPU start
     rc_mpu_data_t mpu_data;
     start_mpu(&mpu_data);
+
+    // Calculate gyro error
+    calculate_gyro_error();
 
     // Sync
     unique_lock<mutex> control_lock(*control_mutex);

@@ -104,15 +104,15 @@ void* filter_sensors(void *arg){
 
     for(;;){
 
-        #if USING_ENCODER
-        // Get time of readings
-        time_spd = rc_nanos_since_boot();
-
         // Correct gyro error
         if(number_of_gyro_readings > COUNT_GYRO){
             rc_mpu_set_dmp_callback(&handle_gyro_error);
             number_of_gyro_readings = 0;    
         }
+
+        #if USING_ENCODER
+        // Get time of readings
+        time_spd = rc_nanos_since_boot();
 
         // 0.002 seconds
         if( (time_spd - time_ref_spd) > 2000 ){ 

@@ -2,8 +2,10 @@
 
 using namespace std;
 
-volatile double gyro_error = 0, gyro_time, last_gyro, new_gyro;
-volatile double gyro_offset = 0;
+#define COUNT_GYRO 10;
+
+volatile double gyro_error = 0;
+volatile double t_error_gyro = 0;
 
 // Time variables
 volatile uint64_t time_spd = 0, time_ref_spd = 0;
@@ -12,6 +14,9 @@ volatile uint64_t time_spd = 0, time_ref_spd = 0;
 static void start_mpu(rc_mpu_data_t* mpu_data){
     // MPU configuration struct
     rc_mpu_config_t mpu_config = rc_mpu_default_config();
+
+    volatile vector<double> gyro_readings;
+    volatile double last_gyro = 0;
 
     // Calibrate gyro
     if(rc_mpu_calibrate_gyro_routine(config)<0){
@@ -25,12 +30,23 @@ static void start_mpu(rc_mpu_data_t* mpu_data){
     mpu_config.dmp_interrupt_sched_policy = SCHED_FIFO;
     mpu_config.dmp_interrupt_priority = 1;
 
-    // time_ref_spd = rc_nanos_since_boot();
-    // last_gyro = data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
-    // time_spd = rc_nanos_since_boot();
-    // new_gyro = data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
-    // gyro_error = last_gyro - new_gyro
-    // gyro_time = time_spd - time_spd;
+    for (size_t i = ; i <= COUNT_GYRO; i++)
+    {
+        gyro_readings.push_back(data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;);
+    }
+
+    for (double value:gyro_readings)
+    {
+        if(last_gyro == 0)
+            last_gyro = value;
+        
+        else{
+            gyro_error += last_gyro - value;
+            last_gyro = value;
+        }
+    }
+    
+    gyro_error /= COUNT_GYRO;
 
     rc_mpu_initialize_dmp(mpu_data, mpu_config);
 }
@@ -40,7 +56,7 @@ static void mpu_turnoff(void){
 }
 
 static void handle_gyro_error(void){
-    gyro_offset += gyro_error;
+    t_error_gyro += gyro_error;
 }
 
 void* filter_sensors(void *arg){
@@ -64,6 +80,8 @@ void* filter_sensors(void *arg){
 
     double exp_result;
 
+    int number_of_gyro_readings = 0;
+
     // Special kind of index
     index speed_idx(2, 0);
     index enc_idx(2, 0);
@@ -85,8 +103,10 @@ void* filter_sensors(void *arg){
         time_spd = rc_nanos_since_boot();
 
         // Correct gyro error
-        if((time_spd - time_ref_spd) gyro_time)
+        if(number_of_gyro_readings > COUNT_GYRO){
             rc_mpu_set_dmp_callback(&handle_gyro_error);
+            number_of_gyro_readings = 0;    
+        }
 
         // 0.002 seconds
         if( (time_spd - time_ref_spd) > 2000 ){ 
@@ -136,7 +156,8 @@ void* filter_sensors(void *arg){
 
         // Integrate gyro and store into readings[1], integration done by mpu dmp mode
         //      degrees (º)
-        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG - t_error_gyro;
+        ++number_of_gyro_readings;
         
         // Sleep for some time
         rc_usleep(50);

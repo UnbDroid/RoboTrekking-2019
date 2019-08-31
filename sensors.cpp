@@ -2,27 +2,74 @@
 
 using namespace std;
 
-#define COUNT_GYRO 10;
+#define COUNT_GYRO 500
+#define I2C_BUS 2
+#define TEST_GYRO 0
 
-volatile double gyro_error = 0;
-volatile double t_error_gyro = 0;
+// Variables to handle with gyro error
+double gyro_error = 0, drift;
+double t_error_gyro = 0;
+int number_of_gyro_readings = 0;
+bool tested = false;
+#if TEST_GYRO
+double max_value = 0;
+#endif
+
+rc_mpu_data_t mpu_data;
 
 // Time variables
 volatile uint64_t time_spd = 0, time_ref_spd = 0;
+
+// Handle with the gyro error
+static void handle_gyro_error(void){
+    static double last_gyro = 0.0, first_gyro;
+    static bool started_reading = false;
+    double value;
+    static double drift_m;
+
+    if(tested){
+        drift += drift_m;
+        if(number_of_gyro_readings >= COUNT_GYRO){
+            t_error_gyro += gyro_error;
+            number_of_gyro_readings = 0;
+        }
+        else
+            number_of_gyro_readings++;
+    }
+    else{
+        if(!started_reading){
+            last_gyro = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+            first_gyro = last_gyro;
+            started_reading = true;
+        ++number_of_gyro_readings;
+        }
+        
+        else{
+            value = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;
+            gyro_error += value;
+            drift += value - last_gyro;
+            last_gyro = value;
+            ++number_of_gyro_readings;
+        }
+        if(number_of_gyro_readings == COUNT_GYRO){
+            tested = true;
+            gyro_error /= COUNT_GYRO;
+            drift_m = drift / COUNT_GYRO;
+            drift = 0;
+        }
+    }
+}
 
 // Start MPU and return struct from where we can pool the data
 static void start_mpu(rc_mpu_data_t* mpu_data){
     // MPU configuration struct
     rc_mpu_config_t mpu_config = rc_mpu_default_config();
 
-    volatile vector<double> gyro_readings;
-    volatile double last_gyro = 0;
-
-    // Calibrate gyro
-    if(rc_mpu_calibrate_gyro_routine(config)<0){
-        printf("Failed to complete gyro calibration\n");
-        return -1;
-    }
+    // mpu_config.i2c_bus = I2C_BUS;
+    // if(rc_mpu_calibrate_gyro_routine(mpu_config)<0){
+    //         printf("Failed to complete gyro calibration\n");
+    //         return;
+    // }
 
     // Special configuration of config for dmp
 	mpu_config.dmp_auto_calibrate_gyro = 0;
@@ -31,34 +78,12 @@ static void start_mpu(rc_mpu_data_t* mpu_data){
     mpu_config.dmp_interrupt_priority = 1;
 
     rc_mpu_initialize_dmp(mpu_data, mpu_config);
+
+    rc_mpu_set_dmp_callback(handle_gyro_error);
 }
 
 static void mpu_turnoff(void){
     rc_mpu_power_off();
-}
-
-static void calculate_gyro_error(){
-    for (size_t i = ; i <= COUNT_GYRO; i++)
-    {
-        gyro_readings.push_back(data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG;);
-    }
-
-    for (double value:gyro_readings)
-    {
-        if(last_gyro == 0.0)
-            last_gyro = value;
-        
-        else{
-            gyro_error += last_gyro - value;
-            last_gyro = value;
-        }
-    }
-    
-    gyro_error /= COUNT_GYRO;
-}
-
-static void handle_gyro_error(void){
-    t_error_gyro += gyro_error;
 }
 
 void* filter_sensors(void *arg){
@@ -83,8 +108,6 @@ void* filter_sensors(void *arg){
 
     double exp_result;
 
-    int number_of_gyro_readings = 0;
-
     // Special kind of index
     index speed_idx(2, 0);
     index enc_idx(2, 0);
@@ -94,11 +117,7 @@ void* filter_sensors(void *arg){
     #endif
 
     // MPU start
-    rc_mpu_data_t mpu_data;
     start_mpu(&mpu_data);
-
-    // Calculate gyro error
-    calculate_gyro_error();
 
     // Sync
     unique_lock<mutex> control_lock(*control_mutex);
@@ -108,12 +127,6 @@ void* filter_sensors(void *arg){
     time_ref_spd = rc_nanos_since_boot();
 
     for(;;){
-
-        // Correct gyro error
-        if(number_of_gyro_readings > COUNT_GYRO){
-            rc_mpu_set_dmp_callback(&handle_gyro_error);
-            number_of_gyro_readings = 0;    
-        }
 
         #if USING_ENCODER
         // Get time of readings
@@ -168,14 +181,25 @@ void* filter_sensors(void *arg){
 
         // Integrate gyro and store into readings[1], integration done by mpu dmp mode
         //      degrees (º)
-        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG - t_error_gyro;
-        ++number_of_gyro_readings;
+        readings[1] = mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG - drift;
+        #if TEST_GYRO
+        static double dda = 0;
+
+        if(abs(dda) <= abs(max_value))
+            dda = max_value;
+        max_value = readings[1];
+        cout << "leitura: " << readings[1] << '\t' 
+            << "maximo: " << dda << '\t' 
+            << "puro: " << mpu_data.dmp_TaitBryan[TB_YAW_Z]*RAD_TO_DEG << '\t'
+            << "drift: " << drift  << '\t'
+            << "error: " << t_error_gyro << endl;
+        #endif
         
         // Sleep for some time
         rc_usleep(50);
 
         if(rc_get_state() == EXITING)
-            break;    
+            break;
     }    
 
     mpu_turnoff();

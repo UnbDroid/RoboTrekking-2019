@@ -27,19 +27,12 @@ float findCone(Mat img_original, float* accuracy)
   return 50-100*((m.m10/m.m00)/img_original.cols);
 }
 
-void* vision_thread(void* args)
+void vision_funct(visonArgs* args)
 {
   int key;
   Mat img_hsv, dilated, eroded ,img_original, frame_threshold;
   img_original = imread("./"+String(argv[1]),IMREAD_COLOR);
-
-  visonArgs* vision_arguments = (visionArgs*) args;
-  float* accuracy = (float*) vision_arguments->vis_accuracy;
-  float* direction = (float*) vision_arguments->vis_direction;
-  
-  direction = findCone(img_original, &accuracy);
-//   cout<<"dir: "<<direction<<endl;
-//   cout<<"acc: "<<accuracy<<endl;
+  visonArgs* vision_arguments = visonArgs* args;
+  vision_arguments->direction = findCone(img_original, &vision_arguments->accuracy);
   waitKey(0);
-  return 0;
 }

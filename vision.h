@@ -10,10 +10,10 @@
 
 
 typedef struct vision_thread_args{
-    float* vis_accuracy;
-    float* vis_direction;
+    double accuracy;
+    double direction;
 } visonArgs;
 
-void* vision_thread(void* args);
+void vision_funct(visonArgs* args);
 
 #endif

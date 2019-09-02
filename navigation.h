@@ -4,7 +4,8 @@
 // Period of navigation
 #define NAVIGATION_PERIOD 0.2
 
-#define DISTANCE_TO_START_GO_AROUND 1.0 //meters
+#define DISTANCE_TO_START_GO_AROUND 0.7 //meters
+#define DISTANCE_TO_USE_VISION 2.0 //meters
 #define OFFSET_ANGLE_TO_START_CIRCLE 20.0
 #define ANGLE_TO_GO_AROUND 90.0
 #define DISTANCE_TO_GO_AROUND 1.0 //meters

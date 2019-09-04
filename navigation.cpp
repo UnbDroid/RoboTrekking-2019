@@ -66,6 +66,7 @@ void* navigation_control(void* args){
     volatile double* readings[4] = (volatile double*) navigation_arguments->arg_g_readings;
 
     visonArgs vision_arguments;
+    VideoCapture cap(0);
 
     for(;;){
         switch (state)
@@ -82,72 +83,71 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_FIRST:
-            //TODO: when neerby the cone, set a flag that start the vision thread
-            
-
             if(distance_betwen_two_points(  robot_position[0],
                                             robot_position[1],
                                             targets_position[0],
                                             targets_position[1]) <= DISTANCE_TO_USE_VISION){
                 ref[0] = APROX_SPEED;
-                vision_funct(&vision_arguments);
-                //if(vision_arguments->accuracy)
-                //TODO: correct robot position acording to angle
+                see_beyond(&vision_arguments);
+                if(vision_arguments->accuracy > IDEAL_ACCURACY){
+                    // Add a offset angle to correct route to cone
+                    ref[1] += vision_arguments->angle;
+                }
                 if(distace_US() < DISTANCE_TO_START_GO_AROUND){
                     ref[0] = CIRCLE_SPEED;
                     state = GO_AROUND;
                     targets++;             
                 }
             }
+            update_robot_position(readings[0], readings[1]);
             break;
             
         case GO_TO_SECOND:
-            //TODO: when neerby the cone, set a flag that start the vision thread
-            
-
             if(distance_betwen_two_points(  robot_position[0],
                                             robot_position[1],
                                             targets_position[2],
                                             targets_position[3]) <= DISTANCE_TO_START_GO_AROUND){
                 ref[0] = APROX_SPEED;
-                vision_funct(&vision_arguments);
-                //if(vision_arguments->accuracy)
-                //TODO: correct robot position acording to angle
+                see_beyond(&vision_arguments);
+                if(vision_arguments->accuracy > IDEAL_ACCURACY){
+                    // Add a offset angle to correct route to cone
+                    ref[1] += vision_arguments->angle;
+                }
                 if(distace_US() < DISTANCE_TO_START_GO_AROUND){
                     ref[0] = CIRCLE_SPEED;
                     state = GO_AROUND;
                     targets++;             
                 }
             }
+            update_robot_position(readings[0], readings[1]);
             break;
             
         case GO_TO_LAST:
             if(something_neer()){
                 state = DODGE;
             }
-            //TODO: when neerby the cone, set a flag that start the vision thread
-            
-
             if(distance_betwen_two_points(  robot_position[0],
                                             robot_position[1],
                                             targets_position[4],
                                             targets_position[5]) <= DISTANCE_TO_START_GO_AROUND){
                 ref[0] = APROX_SPEED;
-                vision_funct(&vision_arguments);
-                //if(vision_arguments->accuracy)
-                //TODO: correct robot position acording to angle
+                see_beyond(&vision_arguments);
+                if(vision_arguments->accuracy > IDEAL_ACCURACY){
+                    // Add a offset angle to correct route to cone
+                    ref[1] += vision_arguments->angle;
+                }
                 if(distace_US() < DISTANCE_TO_START_GO_AROUND){
                     ref[0] = CIRCLE_SPEED;
                     state = END;         
                 }
             }
+            update_robot_position(readings[0], readings[1]);
             break;
             
         case GO_AROUND:
             saw_traffic_cone = false;
             reached_target = false;
             targets_updated = false;
-            //TODO: set the vision flag to make the vision thread stop
 
             ref[0] = CIRCLE_SPEED;
             if(!started_go_around){
@@ -164,6 +164,8 @@ void* navigation_control(void* args){
             else{
                 if(targets == 1){
                     state = GO_TO_SECOND;
+                    robot_position[0] = targets_position[0];
+                    robot_position[1] = targets_position[1];
                     // Where the robot is: (40,20); where it needs to go: (30,2)
                     ref[1] = angle_from_positions(  robot_position[0],
                                                     robot_position[1],
@@ -172,6 +174,8 @@ void* navigation_control(void* args){
                 }
                 else{
                     state = GO_TO_LAST;
+                    robot_position[0] = targets_position[2];
+                    robot_position[1] = targets_position[3];
                     // Where the robot is: (30,2); where it needs to go: (6,18)
                     ref[1] = angle_from_positions(  robot_position[0],
                                                     robot_position[1],
@@ -193,7 +197,7 @@ void* navigation_control(void* args){
             break;
         }
 
-        update_robot_position(readings[0], readings[1]);
+        
         readings[0] = 0;
 
         rc_usleep(NAVIGATION_PERIOD*1000);

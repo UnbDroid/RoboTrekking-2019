@@ -9,6 +9,7 @@
 #define OFFSET_ANGLE_TO_START_CIRCLE 20.0
 #define ANGLE_TO_GO_AROUND 90.0
 #define DISTANCE_TO_GO_AROUND 1.0 //meters
+#define IDEAL_ACCURACY 5.0
 
 // Speed (m/s)
 #define MAX_SPEED       3

@@ -61,10 +61,7 @@ void* navigation_control(void* args){
     // Times that the robot changed the angle to go around the cone
     int times_change_ang = 0;
 
-    // Flags
-    bool saw_traffic_cone = false;
-    bool reached_target = false;
-    bool targets_updated = false;
+    // Flag
     bool started_go_around = false
 
     // Casting
@@ -130,17 +127,15 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_LAST:
-            if(something_neer()){
+            if(us_readings[0] || us_readings[1] || us_readings[2] || us_readings[3]){
                 state = DODGE;
             }
             if(distance_betwen_two_points(  robot_position[0],
                                             robot_position[1],
                                             targets_position[4],
                                             targets_position[5]) <= DISTANCE_TO_START_GO_AROUND){
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
-                    ref[0] = CIRCLE_SPEED;
+                if(distace_US() < DISTANCE_TO_START_GO_AROUND)
                     state = END;         
-                }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
                 if(vision_arguments->accuracy > IDEAL_ACCURACY){
@@ -152,10 +147,6 @@ void* navigation_control(void* args){
             break;
             
         case GO_AROUND:
-            saw_traffic_cone = false;
-            reached_target = false;
-            targets_updated = false;
-
             ref[0] = CIRCLE_SPEED;
             if(!started_go_around){
                 ref[1] -= OFFSET_ANGLE_TO_START_CIRCLE;
@@ -193,6 +184,7 @@ void* navigation_control(void* args){
             break;
 
         case DODGE:
+
             break;
             
         case END:

@@ -29,14 +29,9 @@ float findCone(Mat img_original, float* accuracy)
 
 void see_beyond(visonArgs* args)
 {
-  if(cap.isOpened()){
     Mat img_original;
     cap >> img_original;
     visonArgs* vision_arguments = visonArgs* args;
     vision_arguments->direction = findCone(img_original, &vision_arguments->accuracy);
     vision_arguments->angle = -(vision_arguments->direction * ANGLE_OF_MAX_DIST) / MAX_DIST_FROM_CENTER;
-  }
-  else{
-    cout << "Camera not ON" << endl;
-  }
 }

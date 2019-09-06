@@ -71,6 +71,9 @@ void* navigation_control(void* args){
 
     visonArgs vision_arguments;
     VideoCapture cap(0);
+    if(!cap.isOpened()){
+        return NULL;
+    }
 
     for(;;){
         switch (state)

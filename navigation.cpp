@@ -15,7 +15,14 @@ volatile double robot_position[2] = {3, 3};
 //      3 -> y position of second target
 //      4 -> x position of third and last target
 //      5 -> y position of third and last target
-double targets_position[6] = {40, 20, 30, 2, 6, 18}
+double targets_position[6] = {40, 20, 30, 2, 6, 18};
+
+// Boolean vector that contain if US see something in a predeterminated range or not
+//      0 -> left US
+//      1 -> left center US
+//      2 -> right center US
+//      3 -> right US
+volatile bool us_readings[4] = {false, false, false, false};
 
 // Return the angle between two points
 double angle_from_positions(double x1, double y1, double x2, double y2){
@@ -87,16 +94,16 @@ void* navigation_control(void* args){
                                             robot_position[1],
                                             targets_position[0],
                                             targets_position[1]) <= DISTANCE_TO_USE_VISION){
+                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
+                    ref[0] = CIRCLE_SPEED;
+                    state = GO_AROUND;
+                    targets++;             
+                }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
                 if(vision_arguments->accuracy > IDEAL_ACCURACY){
                     // Add a offset angle to correct route to cone
                     ref[1] += vision_arguments->angle;
-                }
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
-                    ref[0] = CIRCLE_SPEED;
-                    state = GO_AROUND;
-                    targets++;             
                 }
             }
             update_robot_position(readings[0], readings[1]);
@@ -107,16 +114,16 @@ void* navigation_control(void* args){
                                             robot_position[1],
                                             targets_position[2],
                                             targets_position[3]) <= DISTANCE_TO_START_GO_AROUND){
+                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
+                    ref[0] = CIRCLE_SPEED;
+                    state = GO_AROUND;
+                    targets++;             
+                }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
                 if(vision_arguments->accuracy > IDEAL_ACCURACY){
                     // Add a offset angle to correct route to cone
                     ref[1] += vision_arguments->angle;
-                }
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
-                    ref[0] = CIRCLE_SPEED;
-                    state = GO_AROUND;
-                    targets++;             
                 }
             }
             update_robot_position(readings[0], readings[1]);
@@ -130,15 +137,15 @@ void* navigation_control(void* args){
                                             robot_position[1],
                                             targets_position[4],
                                             targets_position[5]) <= DISTANCE_TO_START_GO_AROUND){
+                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
+                    ref[0] = CIRCLE_SPEED;
+                    state = END;         
+                }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
                 if(vision_arguments->accuracy > IDEAL_ACCURACY){
                     // Add a offset angle to correct route to cone
                     ref[1] += vision_arguments->angle;
-                }
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
-                    ref[0] = CIRCLE_SPEED;
-                    state = END;         
                 }
             }
             update_robot_position(readings[0], readings[1]);

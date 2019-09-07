@@ -6,8 +6,8 @@ LINKER		:= g++
 
 # compiler and linker flags
 WFLAGS		:= -Wall -Wextra -Werror=float-equal -Wuninitialized -Wunused-variable -Wdouble-promotion
-CFLAGS		:= -g -c -Wall
-LDFLAGS		:= -pthread -lm -lrt -l:librobotcontrol.so.1
+CFLAGS		:= -g -c -Wall -opencv
+LDFLAGS		:= -pthread -lm -lrt -l:librobotcontrol.so.1 `pkg-config opencv --cflags --libs
 
 SOURCES		:= $(wildcard *.c*)
 INCLUDES	:= $(wildcard *.h*)
@@ -58,4 +58,8 @@ uninstall:
 runonboot:
 	@$(MAKE) install --no-print-directory
 	@$(SYMLINK) $(DESTDIR)$(prefix)/bin/$(TARGET) $(SYMLINKDIR)/$(SYMLINKNAME)
+<<<<<<< HEAD
 	@echo "$(TARGET) Set to Run on Boot"
+=======
+	@echo "$(TARGET) Set to Run on Boot"
+>>>>>>> Makefile

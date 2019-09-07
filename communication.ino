@@ -1,5 +1,11 @@
-#define MOTOR_D 6
-#define MOTOR_E 9
+// Motor constants
+byte MOTOR_L_A = 8;
+byte MOTOR_L_B = 7;
+byte MOTOR_L_PWM = 6;
+
+byte MOTOR_R_A = 11;
+byte MOTOR_R_B = 10;
+byte MOTOR_R_PWM = 9;
 
 byte motor, count, pwm, read_char;
 
@@ -7,14 +13,14 @@ unsigned long time;
 
 void setup() {
     Serial.begin(115200);
-    pinMode(4, OUTPUT);
-    pinMode(5, OUTPUT);
-    pinMode(7, OUTPUT);
-    pinMode(8, OUTPUT);
-    digitalWrite(4, HIGH);
-    digitalWrite(5, LOW);
-    digitalWrite(7, HIGH);
-    digitalWrite(8, LOW);
+    pinMode(MOTOR_L_A, OUTPUT);
+    pinMode(MOTOR_L_B, OUTPUT);
+    pinMode(MOTOR_R_A, OUTPUT);
+    pinMode(MOTOR_R_B, OUTPUT);
+    digitalWrite(MOTOR_L_A, LOW);
+    digitalWrite(MOTOR_L_B, HIGH);
+    digitalWrite(MOTOR_R_A, LOW);
+    digitalWrite(MOTOR_R_B, HIGH);
 
     count = 0;
     pwm = 0;
@@ -38,10 +44,10 @@ void loop() {
 
                 if(!count){
                     if(motor == 'd'){
-                        analogWrite(MOTOR_D, pwm);
+                        analogWrite(MOTOR_R_PWM, pwm);
                     }
                     else if(motor == 'e'){
-                        analogWrite(MOTOR_E, pwm);
+                        analogWrite(MOTOR_L_PWM, pwm);
                     }
                     pwm = 0;
                 }
@@ -59,7 +65,7 @@ void loop() {
     else if( (millis()-time) > 3*1e3 ){
         // 3 seconds not receiving anything, turn off motors
         
-        analogWrite(MOTOR_D, 0);
-        analogWrite(MOTOR_E, 0);
+        analogWrite(MOTOR_R_PWM, 0);
+        analogWrite(MOTOR_L_PWM, 0);
     }
 }

@@ -1,4 +1,5 @@
 #include "navigation.h"
+#include "vision.h"
 
 void* navigation_control(void* args){
     if(rc_enable_signal_handler() == -1){

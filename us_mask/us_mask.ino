@@ -92,7 +92,7 @@ uint8_t mask(unsigned long* readings_us)
 void read_us() //WARNING: TO GUARANTEE BEST RESULTS,  29ms should be the shortest delay between pings (keep the delay inside the loop)
 {
   #ifdef ALFA
-    float filtered_us[4] = {0.0,0.0,0.0,0.0};
+    static float filtered_us[4] = {0.0,0.0,0.0,0.0};
   #else
     unsigned long readings_us[4]={0,0,0,0};
   #endif

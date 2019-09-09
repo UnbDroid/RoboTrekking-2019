@@ -34,7 +34,7 @@ void setup() {
 
 //READ THE LINES BELOW !!!!!!!!!!!!
 
-//the ALFA define activates and deactivates the low_pass_filter, if you need faster results and dont want to wait for the results to be estable you can delete the line defining it
+//the ALFA define activates and deactivates the low_pass_filter, if you need faster results and dont want to wait for the results to get stable you can delete the line defining it
 
 //____________________________________________
 //bits representation of ULTRASSONICS:
@@ -53,7 +53,7 @@ uint8_t value_per_us(float value)
 uint8_t value_per_us(unsigned long value)
 #endif
 {
-  if (value<50.0 && value >0.0)
+  if (value<50.0 && value >1.0)
     return 0x00;
   else if (value>50.0 && value <100.0)
     return 0x01;

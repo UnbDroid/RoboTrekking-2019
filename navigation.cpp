@@ -62,7 +62,8 @@ void* navigation_control(void* args){
     int times_change_ang = 0;
 
     // Flag
-    bool started_go_around = false
+    bool started_go_around = false;
+    bool seen_cone = false;
 
     // Casting
     navigationArgs* navigation_arguments = (navigationArgs*)args;
@@ -101,9 +102,10 @@ void* navigation_control(void* args){
                 }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
-                if(vision_arguments->accuracy > IDEAL_ACCURACY){
+                if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
                     // Add a offset angle to correct route to cone
                     ref[1] += vision_arguments->angle;
+                    seen_cone = true;
                 }
             }
             update_robot_position(readings[0], readings[1]);
@@ -121,18 +123,16 @@ void* navigation_control(void* args){
                 }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
-                if(vision_arguments->accuracy > IDEAL_ACCURACY){
+                if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
                     // Add a offset angle to correct route to cone
                     ref[1] += vision_arguments->angle;
+                    seen_cone = true;
                 }
             }
             update_robot_position(readings[0], readings[1]);
             break;
             
         case GO_TO_LAST:
-            if(us_readings[0] || us_readings[1] || us_readings[2] || us_readings[3]){
-                state = DODGE;
-            }
             if(distance_betwen_two_points(  robot_position[0],
                                             robot_position[1],
                                             targets_position[4],
@@ -141,16 +141,22 @@ void* navigation_control(void* args){
                     state = END;         
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
-                if(vision_arguments->accuracy > IDEAL_ACCURACY){
+                if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
                     // Add a offset angle to correct route to cone
                     ref[1] += vision_arguments->angle;
+                    seen_cone = true;
                 }
+            }
+            if(us_readings[0] || us_readings[1] || us_readings[2] || us_readings[3]){
+                state = DODGE;
             }
             update_robot_position(readings[0], readings[1]);
             break;
             
         case GO_AROUND:
             ref[0] = CIRCLE_SPEED;
+            seen_cone = false;
+
             if(!started_go_around){
                 ref[1] -= OFFSET_ANGLE_TO_START_CIRCLE;
                 started_go_around = true;
@@ -187,7 +193,27 @@ void* navigation_control(void* args){
             break;
 
         case DODGE:
-
+            if(us_readings[0] || us_readings[1]){
+                if(us_readings[1])
+                    ref[1] -= BIG_ANGLE_TO_DODGE;
+                else
+                    ref[1] -= SMALL_ANGLE_TO_DODGE;
+            }
+            else if(us_readings[2] || us_readings[3]){
+                if(us_readings[2])
+                    ref[1] += BIG_ANGLE_TO_DODGE;
+                else
+                    ref[1] += SMALL_ANGLE_TO_DODGE;
+            }
+            else{
+                state = GO_TO_LAST;
+                // Where the robot is: (30,2); where it needs to go: (6,18)
+                ref[1] = angle_from_positions(  robot_position[0],
+                                                robot_position[1],
+                                                targets_position[4],
+                                                targets_position[5]);
+            }
+            update_robot_position(readings[0], readings[1]);
             break;
             
         case END:

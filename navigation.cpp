@@ -28,8 +28,12 @@ volatile bool us_readings[4] = {false, false, false, false};
 double angle_from_positions(double x1, double y1, double x2, double y2){
     double d_x = x1 - x2;
     double d_y = y1 - y2;
+    double angle = atan2(d_y, d_x) * 180 / PI;
+    if(angle < 0){
+      angle += 360;
+    }
 
-    return atan2(d_y, d_x) * 180 / PI;
+    return angle;
 }
 
 double distance_betwen_two_points(double x1, double y1, double x2, double y2){
@@ -43,12 +47,6 @@ double distance_betwen_two_points(double x1, double y1, double x2, double y2){
 void update_robot_position(double distance, double angle){
     robot_position[0] += distance * sin(angle * PI/180);
     robot_position[1] += distance * cos(angle * PI/180);
-}
-
-// Update the robot position acording to angle received from vision and using
-// the target position
-void update_targets(double angle){
-
 }
 
 void* navigation_control(void* args){

@@ -7,12 +7,14 @@
 
 #define COUNT_GYRO 200
 
+// Factor to account for differences in the terrain which affect difference between simulated and real speed
+#define TERRAIN_FACTOR 2.5
+
 #include <stdint.h>
 #include <cstdlib>
 #include <cmath>
 #include <mutex>
 #include <condition_variable>
-#include <iostream>
 #include "index.h"
 #include "main.h"
 #include "controller.h" // For PERIOD

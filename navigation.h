@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <cstdlib>
+#include <mutex>
 
 extern "C" {
     #include <rc/time.h>
@@ -42,9 +43,10 @@ enum State{
 };
 
 typedef struct thread_args{
-    volatile double* arg_refs;
-    volatile double* arg_g_readings;
-    volatile double* arg_distance;
+    double* arg_refs;
+    double* arg_g_readings;
+    mutex* arg_refs_mutex;
+    mutex* arg_sensors_mutex;
     // volatile bool* arg_us[];
 } navigationArgs;
 

@@ -72,9 +72,15 @@ void* navigation_control(void* args){
 
     // Casting
     navigationArgs* navigation_arguments = (navigationArgs*)args;
-    volatile double* ref[2] = (volatile double*) navigation_arguments->arg_refs;
-    volatile double* readings[4] = (volatile double*) navigation_arguments->arg_g_readings;
-    volatile double* distance_travelled = (volatile double*) navigation_arguments->arg_distance;
+    volatile double* ref = (volatile double*) navigation_arguments->arg_refs;
+    volatile double* readings = (volatile double*) navigation_arguments->arg_g_readings;
+
+    // Sync
+    mutex* refs_mutex = navigation_arguments->arg_refs_mutex;
+    mutex* sensors_mutex = navigation_arguments->arg_sensors_mutex;
+
+    unique_lock<mutex> refs_lock(*refs_mutex, defer_lock);
+    unique_lock<mutex> sensors_lock(*sensors_mutex, defer_lock);
 
     visonArgs vision_arguments;
     VideoCapture cap(0);
@@ -86,6 +92,8 @@ void* navigation_control(void* args){
         switch (state)
         {
         case START:
+            refs_lock.lock();
+            
             ref[0] = MAX_SPEED;
             // Where the robot is: (3,3); where it needs to go: (40,20)
             ref[1] = angle_from_positions(  robot_position[0],
@@ -93,29 +101,39 @@ void* navigation_control(void* args){
                                             targets_position[0],
                                             targets_position[1]);
 
+            refs_lock.unlock();
+
             state = GO_TO_FIRST;
             break;
             
         case GO_TO_FIRST:
-            if(distance_betwen_two_points(  3, 3,
-                                            targets_position[0], targets_position[1])
-            - distance_travelled <= DISTANCE_TO_USE_VISION){
-                if(distance_betwen_two_points(  3, 3,
-                                                targets_position[0], targets_position[1])
-                - distance_travelled < DISTANCE_TO_START_GO_AROUND){
+            if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - distance_travelled) <= DISTANCE_TO_USE_VISION){
+                if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - distance_travelled) < DISTANCE_TO_START_GO_AROUND){
                     if(US_find_cone()){
+                        refs_lock.lock();
+
                         ref[0] = CIRCLE_SPEED;
+
+                        refs_lock.unlock();
+
                         // state = GO_AROUND;
                         state = END;
                         targets++;
                         break;            
                     } 
                 }
+                refs_lock.lock();
                 ref[0] = APROX_SPEED;
+                refs_lock.unlock();
+
                 see_beyond(&vision_arguments);
-                if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
+                if( (vision_arguments->accuracy > IDEAL_ACCURACY) && !seen_cone){
                     // Add a offset angle to correct route to cone
+
+                    refs_lock.lock();
                     ref[1] += vision_arguments->angle;
+                    refs_lock.unlock();
+                    
                     seen_cone = true;
                 }
             }

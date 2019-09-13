@@ -107,8 +107,8 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_FIRST:
-            if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - distance_travelled) <= DISTANCE_TO_USE_VISION){
-                if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - distance_travelled) < DISTANCE_TO_START_GO_AROUND){
+            if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - readings[0]) <= DISTANCE_TO_USE_VISION){
+                if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - readings[0]) < DISTANCE_TO_START_GO_AROUND){
                     if(US_find_cone()){
                         refs_lock.lock();
 
@@ -143,10 +143,10 @@ void* navigation_control(void* args){
         case GO_TO_SECOND:
             if(distance_betwen_two_points(  targets_position[0], targets_position[1],
                                             targets_position[2], targets_position[3])
-            - distance_travelled <= DISTANCE_TO_USE_VISION){
+            - readings[0] <= DISTANCE_TO_USE_VISION){
                 if(distance_betwen_two_points(  targets_position[0], targets_position[1],
                                                 targets_position[2], targets_position[3])
-                - distance_travelled < DISTANCE_TO_START_GO_AROUND){
+                - readings[0] < DISTANCE_TO_START_GO_AROUND){
                     if(US_find_cone()){
                         ref[0] = CIRCLE_SPEED;
                         state = GO_AROUND;
@@ -168,10 +168,10 @@ void* navigation_control(void* args){
         case GO_TO_LAST:
             if(distance_betwen_two_points(  targets_position[2], targets_position[3],
                                             targets_position[4], targets_position[5])
-            - distance_travelled <= DISTANCE_TO_USE_VISION){
+            - readings[0] <= DISTANCE_TO_USE_VISION){
                 if(distance_betwen_two_points(  targets_position[2], targets_position[3],
                                                 targets_position[4], targets_position[5])
-                - distance_travelled < DISTANCE_TO_START_GO_AROUND){
+                - readings[0] < DISTANCE_TO_START_GO_AROUND){
                     if(US_find_cone()){
                         state = END;
                         break;            

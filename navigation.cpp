@@ -105,7 +105,8 @@ void* navigation_control(void* args){
                 - distance_travelled < DISTANCE_TO_START_GO_AROUND){
                     if(US_find_cone()){
                         ref[0] = CIRCLE_SPEED;
-                        state = GO_AROUND;
+                        // state = GO_AROUND;
+                        state = END;
                         targets++;
                         break;            
                     } 

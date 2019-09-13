@@ -45,7 +45,7 @@ static double gyro_action(double gyro_ref, double gyro_limit){
     // Given the same considerations, the incremental gain will be magically chosen as 0.0025
     // The derivative gain will be based on a straight line and on a 45 degrees turn, for a straight line, expect a variation of 0.1, and during a turn
     //      a variation of 10 degrees per measure, a gain of 0.4 was choosen  
-    static double gyro_p = 0.08, gyro_i = 0.0025, gyro_d = 0.05, sum_gyro_error = 0, last_gyro = 0; 
+    static double gyro_p = 0.08, gyro_i = 0.0025, gyro_d = 0.5, sum_gyro_error = 0, last_gyro = 0; 
     static double action;
 
     action = gyro_p*gyro_ref + sum_gyro_error + gyro_d*(gyro_ref - last_gyro);
@@ -152,6 +152,10 @@ void* speed_control(void *args){
         #if USING_ENCODER
         speed_readings[INDEX_LEFT] = readings[INDEX_LEFT];
         speed_readings[INDEX_RIGHT] = readings[INDEX_RIGHT];
+        #else
+        // Save simulated speed so sensors thread can estimate distance walked
+        readings[INDEX_LEFT] = simu_speed[INDEX_LEFT];
+        readings[INDEX_RIGHT] = simu_speed[INDEX_RIGHT];
         #endif
 
         speed_ref[INDEX_LEFT] = refs[0];
@@ -168,14 +172,13 @@ void* speed_control(void *args){
         //      To turn clockwise, left speed must increase while right speed must decrease
         //
         // The maximum influence of the gyro will be 80% of the speed reference
-        gyro_PID = gyro_action(gyro_ref, speed_ref[INDEX_LEFT]*0.9);
+        gyro_PID = gyro_action(gyro_ref, speed_ref[INDEX_LEFT]*0.75);
         speed_ref[INDEX_RIGHT] = speed_ref[INDEX_LEFT] + gyro_PID;
         speed_ref[INDEX_LEFT] -= gyro_PID;
 
         // Avoid getting less than 0 values
         speed_ref[INDEX_LEFT] = saturate(speed_ref[INDEX_LEFT], 0);
         speed_ref[INDEX_RIGHT] = saturate(speed_ref[INDEX_RIGHT], 0);
-
 
         // If encoders readings can be trusted up to some level
         #if USING_ENCODER

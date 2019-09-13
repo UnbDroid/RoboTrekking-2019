@@ -24,14 +24,16 @@ double targets_position[6] = {40, 20, 30, 2, 6, 18};
 //      3 -> right US
 volatile bool us_readings[4] = {false, false, false, false};
 
+// Range for angle
+double angle_range = ANGLE_TO_ADD / 2;
+
 // Return the angle between two points
 double angle_from_positions(double x1, double y1, double x2, double y2){
     double d_x = x1 - x2;
     double d_y = y1 - y2;
     double angle = atan2(d_y, d_x) * 180 / PI;
-    if(angle < 0){
-      angle += 360;
-    }
+    if(angle > 90)
+      angle -= 360;
 
     return angle;
 }
@@ -47,6 +49,11 @@ double distance_betwen_two_points(double x1, double y1, double x2, double y2){
 void update_robot_position(double distance, double angle){
     robot_position[0] += distance * sin(angle * PI/180);
     robot_position[1] += distance * cos(angle * PI/180);
+}
+
+// Verify if US finds cone
+bool US_find_cone(){
+    return(us_readings[0] || us_readings[1] || us_readings[2] || us_readings[3]);
 }
 
 void* navigation_control(void* args){
@@ -67,6 +74,7 @@ void* navigation_control(void* args){
     navigationArgs* navigation_arguments = (navigationArgs*)args;
     volatile double* ref[2] = (volatile double*) navigation_arguments->arg_refs;
     volatile double* readings[4] = (volatile double*) navigation_arguments->arg_g_readings;
+    volatile double* distance_travelled = (volatile double*) navigation_arguments->arg_distance;
 
     visonArgs vision_arguments;
     VideoCapture cap(0);
@@ -89,14 +97,18 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_FIRST:
-            if(distance_betwen_two_points(  robot_position[0],
-                                            robot_position[1],
-                                            targets_position[0],
-                                            targets_position[1]) <= DISTANCE_TO_USE_VISION){
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
-                    ref[0] = CIRCLE_SPEED;
-                    state = GO_AROUND;
-                    targets++;             
+            if(distance_betwen_two_points(  3, 3,
+                                            targets_position[0], targets_position[1])
+            - distance_travelled <= DISTANCE_TO_USE_VISION){
+                if(distance_betwen_two_points(  3, 3,
+                                                targets_position[0], targets_position[1])
+                - distance_travelled < DISTANCE_TO_START_GO_AROUND){
+                    if(US_find_cone()){
+                        ref[0] = CIRCLE_SPEED;
+                        state = GO_AROUND;
+                        targets++;
+                        break;            
+                    } 
                 }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
@@ -110,14 +122,18 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_SECOND:
-            if(distance_betwen_two_points(  robot_position[0],
-                                            robot_position[1],
-                                            targets_position[2],
-                                            targets_position[3]) <= DISTANCE_TO_START_GO_AROUND){
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND){
-                    ref[0] = CIRCLE_SPEED;
-                    state = GO_AROUND;
-                    targets++;             
+            if(distance_betwen_two_points(  targets_position[0], targets_position[1],
+                                            targets_position[2], targets_position[3])
+            - distance_travelled <= DISTANCE_TO_USE_VISION){
+                if(distance_betwen_two_points(  targets_position[0], targets_position[1],
+                                                targets_position[2], targets_position[3])
+                - distance_travelled < DISTANCE_TO_START_GO_AROUND){
+                    if(US_find_cone()){
+                        ref[0] = CIRCLE_SPEED;
+                        state = GO_AROUND;
+                        targets++;
+                        break;            
+                    } 
                 }
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
@@ -131,12 +147,17 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_LAST:
-            if(distance_betwen_two_points(  robot_position[0],
-                                            robot_position[1],
-                                            targets_position[4],
-                                            targets_position[5]) <= DISTANCE_TO_START_GO_AROUND){
-                if(distace_US() < DISTANCE_TO_START_GO_AROUND)
-                    state = END;         
+            if(distance_betwen_two_points(  targets_position[2], targets_position[3],
+                                            targets_position[4], targets_position[5])
+            - distance_travelled <= DISTANCE_TO_USE_VISION){
+                if(distance_betwen_two_points(  targets_position[2], targets_position[3],
+                                                targets_position[4], targets_position[5])
+                - distance_travelled < DISTANCE_TO_START_GO_AROUND){
+                    if(US_find_cone()){
+                        state = END;
+                        break;            
+                    } 
+                }         
                 ref[0] = APROX_SPEED;
                 see_beyond(&vision_arguments);
                 if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
@@ -154,39 +175,28 @@ void* navigation_control(void* args){
         case GO_AROUND:
             ref[0] = CIRCLE_SPEED;
             seen_cone = false;
-
-            if(!started_go_around){
-                ref[1] -= OFFSET_ANGLE_TO_START_CIRCLE;
-                started_go_around = true;
-            }
             
-            if(times_change_angl < 2){
-                if(readings[0] >= DISTANCE_TO_GO_AROUND){
-                    times_change_angl++;
-                    ref[1] += ANGLE_TO_GO_AROUND;
-                }
-            }
-            else{
+            if(ref[1] < angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) + angle_range
+               && ref[1] > angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - angle_range){
                 if(targets == 1){
                     state = GO_TO_SECOND;
-                    robot_position[0] = targets_position[0];
-                    robot_position[1] = targets_position[1];
                     // Where the robot is: (40,20); where it needs to go: (30,2)
-                    ref[1] = angle_from_positions(  robot_position[0],
-                                                    robot_position[1],
+                    ref[1] = angle_from_positions(  targets_position[0],
+                                                    targets_position[1],
                                                     targets_position[2],
                                                     targets_position[3]);
                 }
                 else{
                     state = GO_TO_LAST;
-                    robot_position[0] = targets_position[2];
-                    robot_position[1] = targets_position[3];
                     // Where the robot is: (30,2); where it needs to go: (6,18)
-                    ref[1] = angle_from_positions(  robot_position[0],
-                                                    robot_position[1],
+                    ref[1] = angle_from_positions(  targets_position[2],
+                                                    targets_position[3],
                                                     targets_position[4],
                                                     targets_position[5]);
                 }
+            }
+            else{
+                ref[1] -= ANGLE_TO_ADD;
             }
             break;
 

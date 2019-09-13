@@ -12,6 +12,7 @@
 #define IDEAL_ACCURACY                  5.0
 #define BIG_ANGLE_TO_DODGE              1.0 //degrees
 #define SMALL_ANGLE_TO_DODGE            0.5 //degrees
+#define ANGLE_TO_ADD                    30.0 //degrees
 
 // Speed (m/s)
 #define MAX_SPEED       3
@@ -43,6 +44,8 @@ enum State{
 typedef struct thread_args{
     volatile double* arg_refs;
     volatile double* arg_g_readings;
+    volatile double* arg_distance;
+    // volatile bool* arg_us[];
 } navigationArgs;
 
 // Args are the references shared between low-level controller and high-level controller

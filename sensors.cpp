@@ -215,7 +215,7 @@ void* filter_sensors(void *arg){
         rc_usleep(5000);
 
         if(rc_get_state() == EXITING)
-            break;
+            break;    
     }    
 
     mpu_turnoff();

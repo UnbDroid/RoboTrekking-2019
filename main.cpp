@@ -2,11 +2,12 @@
 #include <stdint.h>
 #include <mutex>
 #include <condition_variable>
-#include "communication.h"
-#include "sensors.h"
 #include "main.h"
 
 #if 1
+    #include "communication.h"
+    #include "sensors.h"
+    #include "navigation.h"
     #include "controller.h"
 #else
     #define MAIN_ID
@@ -31,8 +32,8 @@ int main(){
     // Shared between low-level control and communication threads, holds the pwm value to be send to arduino
     volatile uint8_t pwm_to_send[2] = {0, 0};
 
-    // Shared between low and high-level control threads, hold speed and angle error
-    volatile double references[2] = {1, 0};
+    // Shared between low and high-level control threads, hold speed and angle error (desired-measured)
+    volatile double references[2] = {1.5, 0};
 
     // Shared between low and high-level control threads and reading sensors thread, holds:
     //      0 -> Total distance walked
@@ -41,8 +42,11 @@ int main(){
     //      3 -> Speed of right motor
     volatile double general_readings[4] = {0.0, 0.0, 0.0, 0.0};
 
+    // Flag to read US in arduino
+    bool us_flag = false;
+
     /* Variables for synchronization */
-    mutex control_sensors_mutex;
+    mutex control_sensors_mutex, controls_mutex, navigation_sensors_mutex;
     condition_variable control_sensors_cv;
 
     if(rc_enable_signal_handler() == -1){
@@ -53,6 +57,7 @@ int main(){
     pthread_t comm_thread;
     pthread_t control_thread;
     pthread_t sensors_thread;
+    pthread_t navigation_thread;
 
     // initialize 3 main encoders, avoiding problems with PRU
 	if(rc_encoder_eqep_init()){
@@ -79,6 +84,7 @@ int main(){
         control_args.arg_spds = (double*)&general_readings[2];
         control_args.arg_sensors_mutex = &control_sensors_mutex;
         control_args.arg_sensors_cv = &control_sensors_cv;
+        control_args.arg_refs_mutex = &controls_mutex;
 
         // Starts thread that controls the speed of the motors
         rc_pthread_create(&control_thread, speed_control, (void*) &control_args, SCHED_FIFO, 3);
@@ -88,10 +94,23 @@ int main(){
         sensors_args.arg_readings = (double*)general_readings;
         sensors_args.arg_control_mutex = &control_sensors_mutex;
         sensors_args.arg_control_cv = &control_sensors_cv;
+        sensors_args.arg_navigation_mutex = &navigation_sensors_mutex;
 
         // Sensors thread initialization
         if( rc_pthread_create(&sensors_thread, filter_sensors, (void*)&sensors_args, SCHED_FIFO, 2) != 0){
             cout << "Could not start sensors thread!" << endl;
+        }
+
+        // Arguments for navigation (High-level control) thread
+        navigationArgs navig_args;
+        navig_args.arg_refs = (double*)references;
+        navig_args.arg_g_readings = (double*)general_readings;
+        navig_args.arg_refs_mutex = &controls_mutex;
+        navig_args.arg_sensors_mutex = &navigation_sensors_mutex;
+        navig_args.arg_us = &us_flag;
+
+        if( rc_pthread_create(&navigation_thread, navigation_control, (void*)&navig_args, SCHED_FIFO, 3) != 0 ){
+            cout << "Could not start navigation thread!" << endl;
         }
     #endif
 
@@ -103,7 +122,7 @@ int main(){
             break;
     }
 
-    // The exiting is commanded by another thread
+    // The exiting can be commanded by another thread
 
     rc_set_state(EXITING);
 

@@ -27,11 +27,12 @@ float findCone(Mat img_original, float* accuracy)
   return 50-100*((m.m10/m.m00)/img_original.cols);
 }
 
-void see_beyond(visonArgs* args)
+void vision_funct(visonArgs* args)
 {
-    Mat img_original;
-    cap >> img_original;
-    visonArgs* vision_arguments = visonArgs* args;
-    vision_arguments->direction = findCone(img_original, &vision_arguments->accuracy);
-    vision_arguments->angle = -(vision_arguments->direction * ANGLE_OF_MAX_DIST) / MAX_DIST_FROM_CENTER;
+  int key;
+  Mat img_hsv, dilated, eroded ,img_original, frame_threshold;
+  img_original = imread("./"+String(argv[1]),IMREAD_COLOR);
+  visonArgs* vision_arguments = visonArgs* args;
+  vision_arguments->direction = findCone(img_original, &vision_arguments->accuracy);
+  waitKey(0);
 }

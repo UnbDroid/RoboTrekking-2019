@@ -22,7 +22,7 @@ double targets_position[6] = {40, 20, 30, 2, 6, 18};
 //      1 -> left center US
 //      2 -> right center US
 //      3 -> right US
-volatile bool us_readings[4] = {false, false, false, false};
+volatile bool us_readings[4] = {true, false, false, false};
 
 // Range for angle
 double angle_range = ANGLE_TO_ADD / 2;
@@ -63,17 +63,15 @@ void* navigation_control(void* args){
 
     // Number of targets reached
     int targets = 0;
-    // Times that the robot changed the angle to go around the cone
-    int times_change_ang = 0;
 
     // Flag
-    bool started_go_around = false;
     bool seen_cone = false;
 
     // Casting
     navigationArgs* navigation_arguments = (navigationArgs*)args;
     volatile double* ref = (volatile double*) navigation_arguments->arg_refs;
     volatile double* readings = (volatile double*) navigation_arguments->arg_g_readings;
+    bool* us_flag = (bool*) navigation_arguments->arg_us;
 
     // Sync
     mutex* refs_mutex = navigation_arguments->arg_refs_mutex;
@@ -83,10 +81,6 @@ void* navigation_control(void* args){
     unique_lock<mutex> sensors_lock(*sensors_mutex, defer_lock);
 
     visonArgs vision_arguments;
-    VideoCapture cap(0);
-    if(!cap.isOpened()){
-        return NULL;
-    }
 
     for(;;){
         switch (state)
@@ -104,19 +98,25 @@ void* navigation_control(void* args){
             refs_lock.unlock();
 
             state = GO_TO_FIRST;
+            cout << "Started" << endl;
             break;
             
         case GO_TO_FIRST:
             if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - readings[0]) <= DISTANCE_TO_USE_VISION){
+                cout << "Vision On" << endl;
                 if( (distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - readings[0]) < DISTANCE_TO_START_GO_AROUND){
+                    cout << "US On" << endl;
+                    if(!*us_flag){
+                        cout << "IN HERE" << endl;
+                        *us_flag = true;
+                    }
                     if(US_find_cone()){
                         refs_lock.lock();
-
                         ref[0] = CIRCLE_SPEED;
-
                         refs_lock.unlock();
 
                         // state = GO_AROUND;
+                        cout << "Reached 1" << endl;
                         state = END;
                         targets++;
                         break;            
@@ -127,11 +127,12 @@ void* navigation_control(void* args){
                 refs_lock.unlock();
 
                 see_beyond(&vision_arguments);
-                if( (vision_arguments->accuracy > IDEAL_ACCURACY) && !seen_cone){
+                if( (vision_arguments.accuracy > IDEAL_ACCURACY) && !seen_cone){
+                    cout << "Above ideal accuracy" << endl << "\t adding " << (double)vision_arguments.angle;
                     // Add a offset angle to correct route to cone
 
                     refs_lock.lock();
-                    ref[1] += vision_arguments->angle;
+                    ref[1] += (double)vision_arguments.angle;
                     refs_lock.unlock();
                     
                     seen_cone = true;
@@ -141,24 +142,31 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_SECOND:
-            if(distance_betwen_two_points(  targets_position[0], targets_position[1],
-                                            targets_position[2], targets_position[3])
-            - readings[0] <= DISTANCE_TO_USE_VISION){
-                if(distance_betwen_two_points(  targets_position[0], targets_position[1],
-                                                targets_position[2], targets_position[3])
-                - readings[0] < DISTANCE_TO_START_GO_AROUND){
+            if(distance_betwen_two_points(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - readings[0] <= DISTANCE_TO_USE_VISION){
+                if(distance_betwen_two_points(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - readings[0] < DISTANCE_TO_START_GO_AROUND){
+                    if(!us_flag)
+                        *us_flag = true;
                     if(US_find_cone()){
+                        refs_lock.lock();
                         ref[0] = CIRCLE_SPEED;
+                        refs_lock.unlock();
+
                         state = GO_AROUND;
+                        cout << "Reached 2" << endl;
                         targets++;
                         break;            
                     } 
                 }
+                refs_lock.lock();
                 ref[0] = APROX_SPEED;
+                refs_lock.unlock();
+
                 see_beyond(&vision_arguments);
-                if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
+                if(vision_arguments.accuracy > IDEAL_ACCURACY && !seen_cone){
                     // Add a offset angle to correct route to cone
-                    ref[1] += vision_arguments->angle;
+                    refs_lock.lock();
+                    ref[1] += (double)vision_arguments.angle;
+                    refs_lock.unlock();
                     seen_cone = true;
                 }
             }
@@ -166,22 +174,25 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_LAST:
-            if(distance_betwen_two_points(  targets_position[2], targets_position[3],
-                                            targets_position[4], targets_position[5])
-            - readings[0] <= DISTANCE_TO_USE_VISION){
-                if(distance_betwen_two_points(  targets_position[2], targets_position[3],
-                                                targets_position[4], targets_position[5])
-                - readings[0] < DISTANCE_TO_START_GO_AROUND){
+            if(!us_flag)
+                *us_flag = true;
+            if(distance_betwen_two_points(targets_position[2], targets_position[3],targets_position[4], targets_position[5]) - readings[0] <= DISTANCE_TO_USE_VISION){
+                if(distance_betwen_two_points(targets_position[2], targets_position[3], targets_position[4], targets_position[5]) - readings[0] < DISTANCE_TO_START_GO_AROUND){
                     if(US_find_cone()){
                         state = END;
                         break;            
                     } 
-                }         
+                }
+                refs_lock.lock();
                 ref[0] = APROX_SPEED;
+                refs_lock.unlock();
+
                 see_beyond(&vision_arguments);
-                if(vision_arguments->accuracy > IDEAL_ACCURACY && !seen_cone){
+                if(vision_arguments.accuracy > IDEAL_ACCURACY && !seen_cone){
                     // Add a offset angle to correct route to cone
-                    ref[1] += vision_arguments->angle;
+                    refs_lock.lock();
+                    ref[1] += (double)vision_arguments.angle;
+                    refs_lock.unlock();
                     seen_cone = true;
                 }
             }
@@ -192,11 +203,15 @@ void* navigation_control(void* args){
             break;
             
         case GO_AROUND:
+            refs_lock.lock();
             ref[0] = CIRCLE_SPEED;
+            refs_lock.unlock();
             seen_cone = false;
+            *us_flag = false;
             
             if(ref[1] < angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) + angle_range
                && ref[1] > angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - angle_range){
+                refs_lock.lock();
                 if(targets == 1){
                     state = GO_TO_SECOND;
                     // Where the robot is: (40,20); where it needs to go: (30,2)
@@ -213,13 +228,17 @@ void* navigation_control(void* args){
                                                     targets_position[4],
                                                     targets_position[5]);
                 }
+                refs_lock.unlock();
             }
             else{
+                refs_lock.lock();
                 ref[1] -= ANGLE_TO_ADD;
+                refs_lock.unlock();
             }
             break;
 
         case DODGE:
+            refs_lock.lock();
             if(us_readings[0] || us_readings[1]){
                 if(us_readings[1])
                     ref[1] -= BIG_ANGLE_TO_DODGE;
@@ -240,11 +259,14 @@ void* navigation_control(void* args){
                                                 targets_position[4],
                                                 targets_position[5]);
             }
+            refs_lock.unlock();
             update_robot_position(readings[0], readings[1]);
             break;
             
         case END:
+            refs_lock.lock();
             ref[0] = STOP;
+            refs_lock.unlock();
             break;
         
         default:

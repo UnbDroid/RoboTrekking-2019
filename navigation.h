@@ -6,13 +6,14 @@
 
 #define DISTANCE_TO_START_GO_AROUND     0.7 //meters
 #define DISTANCE_TO_USE_VISION          2.0 //meters
+
 #define OFFSET_ANGLE_TO_START_CIRCLE    20.0
 #define ANGLE_TO_GO_AROUND              90.0
-#define DISTANCE_TO_GO_AROUND           1.0 //meters
-#define IDEAL_ACCURACY                  5.0
 #define BIG_ANGLE_TO_DODGE              1.0 //degrees
 #define SMALL_ANGLE_TO_DODGE            0.5 //degrees
 #define ANGLE_TO_ADD                    30.0 //degrees
+
+#define IDEAL_ACCURACY                  5.0
 
 // Speed (m/s)
 #define MAX_SPEED       3
@@ -24,12 +25,15 @@
 #include <math.h>
 #include <cstdlib>
 #include <mutex>
+#include "sensors.h"
 
 extern "C" {
     #include <rc/time.h>
     #include <rc/adc.h>
     #include <rc/start_stop.h>
 }
+
+using namespace std;
 
 // States of the navigation
 enum State{
@@ -47,7 +51,7 @@ typedef struct thread_args{
     double* arg_g_readings;
     mutex* arg_refs_mutex;
     mutex* arg_sensors_mutex;
-    // volatile bool* arg_us[];
+    bool* arg_us;
 } navigationArgs;
 
 // Args are the references shared between low-level controller and high-level controller

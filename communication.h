@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <cstring>
+#include <mutex>
 #include "main.h"
 
 using namespace std;
@@ -19,6 +20,7 @@ typedef struct comm_thread_args {
     uint8_t* arg_pwms;
     bool* which_us;
     bool* flag;
+    mutex* navigation_mutex;
 } commArgs;
 
 // Receives address of array containing 2 pwm values to be sent to the motors

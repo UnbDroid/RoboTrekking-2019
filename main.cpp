@@ -27,6 +27,10 @@ extern "C" {
 int main(){
     cout << "Lembrou de usar config-pin em todos os pinos?" << endl;
 
+    if(rc_enable_signal_handler() == -1){
+        return -1;
+    }
+    
     /* Shared variables */
 
     // Shared between low-level control and communication threads, holds the pwm value to be send to arduino
@@ -42,21 +46,18 @@ int main(){
     //      3 -> Speed of right motor
     volatile double general_readings[4] = {0.0, 0.0, 0.0, 0.0};
 
-    /* Variables for synchronization */
-    mutex control_sensors_mutex, controls_mutex, navigation_sensors_mutex;
-    condition_variable control_sensors_cv;
+    // Explain
+    volatile bool which_us[4], flag=1;
 
-    if(rc_enable_signal_handler() == -1){
-        return -1;
-    }
+    /* Variables for synchronization */
+    mutex control_sensors_mutex, controls_mutex, navigation_sensors_mutex, nav_comm_mutex;
+    condition_variable control_sensors_cv;
 
     // Threads
     pthread_t comm_thread;
     pthread_t control_thread;
     pthread_t sensors_thread;
     pthread_t navigation_thread;
-
-    volatile bool flag;
 
     // initialize 3 main encoders, avoiding problems with PRU
 	if(rc_encoder_eqep_init()){
@@ -66,12 +67,15 @@ int main(){
     // Start voltage ADC reader
     if(rc_adc_init()==-1) 
         return -1;
+
     commArgs comm_args;
     comm_args.arg_pwms = (uint8_t*) pwm_to_send;
     comm_args.which_us = (bool*) which_us;
-    comm_args.flag = &flag;
+    comm_args.flag = (bool*) &flag;
+    comm_args.navigation_mutex = &nav_comm_mutex;
+
     // Starts thread that sends info to the arduino, SCHED_OTHER is the common RR
-    if( rc_pthread_create(&comm_thread, send_pwm, (void*)pwm_to_send, SCHED_FIFO, 1) != 0){
+    if( rc_pthread_create(&comm_thread, send_pwm, (void*) &comm_args, SCHED_FIFO, 1) != 0){
         cout << "Could not start communication thread!" << endl;
     }
 
@@ -118,6 +122,11 @@ int main(){
     for(;;){
         // Infinite loop to get ctrl-C and exit program
         // Allows threads to run indefinitly
+        nav_comm_mutex.lock();
+
+        cout << (bool)which_us[0] << ' ' << which_us[1] << ' ' << which_us[2] << ' ' << which_us[3] << endl;
+
+        nav_comm_mutex.unlock();
 
         if(rc_get_state() == EXITING)
             break;

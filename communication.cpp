@@ -4,10 +4,11 @@ void* send_pwm(void *args){
 	int arduino_bus = 1; // Bus to communicate with Arduino
     char str[8] = {'*', '0', '0', '0', '*', '0', '0', '0'}; // The ones left with '*' can be either a letter or a number
     uint8_t leftMotor, rightMotor;
+    char us_data;
 
     // Casting
     commArgs* comm_args = (commArgs*)args;
-    uint8_t* pwms = comm_args->args_pwms;
+    uint8_t* pwms = comm_args->arg_pwms;
     bool* which_us = comm_args->which_us;
     bool* flag = comm_args->flag;
 
@@ -34,6 +35,16 @@ void* send_pwm(void *args){
         str[4*INDEX_RIGHT + 1] = '0' + (rightMotor/100);
         str[4*INDEX_RIGHT + 2] = '0' + (rightMotor%100)/10;
         str[4*INDEX_RIGHT + 3] = '0' + (rightMotor%10);
+
+        if(rc_uart_bytes_avaiable(arduino_bus) && flag) {
+            rc_uart_read_bytes(arduino_bus, &us_data, 1);
+            if ( (uint8_t)(~us_data) != 0x00) {
+                if(us_data & 0x01) args->which_us[0] = true;
+                if(us_data & 0x02) args->which_us[1] = true;
+                if(us_data & 0x04) args->which_us[2] = true;
+                if(us_data & 0x08) args->which_us[3] = true;
+            }
+        }
 
         rc_uart_flush(arduino_bus); // Flush because we do not want trash into the communication line
 

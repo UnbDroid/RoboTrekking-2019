@@ -1,12 +1,15 @@
 #include "communication.h"
 
-void* send_pwm(void *pwm){
+void* send_pwm(void *args){
 	int arduino_bus = 1; // Bus to communicate with Arduino
     char str[8] = {'*', '0', '0', '0', '*', '0', '0', '0'}; // The ones left with '*' can be either a letter or a number
     uint8_t leftMotor, rightMotor;
 
     // Casting
-    uint8_t* pwms = (uint8_t*)pwm;
+    commArgs* comm_args = (commArgs*)args;
+    uint8_t* pwms = comm_args->args_pwms;
+    bool* which_us = comm_args->which_us;
+    bool* flag = comm_args->flag;
 
     if(rc_enable_signal_handler() == -1){
         return NULL;

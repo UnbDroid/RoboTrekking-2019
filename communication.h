@@ -18,6 +18,7 @@ extern "C"{
 typedef struct comm_thread_args {
     uint8_t* arg_pwms;
     bool* which_us;
+    bool* flag;
 } commArgs;
 
 // Receives address of array containing 2 pwm values to be sent to the motors

@@ -15,7 +15,12 @@ extern "C"{
 #define TIMEOUT_S 0.5
 #define BAUDRATE 115200
 
+typedef struct comm_thread_args {
+    uint8_t* arg_pwms;
+    bool* which_us;
+} commArgs;
+
 // Receives address of array containing 2 pwm values to be sent to the motors
-void* send_pwm(void *pwm);
+void* send_pwm(void* args);
 
 #endif

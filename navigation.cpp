@@ -25,7 +25,7 @@ double targets_position[6] = {40, 20, 30, 2, 6, 18};
 volatile bool us_readings[4] = {true, false, false, false};
 
 // Range for angle
-double angle_range = ANGLE_TO_ADD / 2;
+double angle_range = ANGLE_TO_ADD;
 
 // Return the angle between two points
 double angle_from_positions(double x1, double y1, double x2, double y2){
@@ -83,6 +83,7 @@ void* navigation_control(void* args){
     visonArgs vision_arguments;
 
     double distance_left;
+    double desiered_angle;
 
     for(;;){
         switch (state)
@@ -109,10 +110,10 @@ void* navigation_control(void* args){
                 cout << "Vision On" << endl;
                 if(distance_left < DISTANCE_TO_START_GO_AROUND){
                     cout << "US On" << endl;
-                    if(!*us_flag){
-                        cout << "IN HERE" << endl;
-                        *us_flag = true;
-                    }
+                    // if(!*us_flag){
+                    //     cout << "IN HERE" << endl;
+                    //     *us_flag = true;
+                    // }
                     if(US_find_cone() || distance_left < DISTANCE_ARRIVED){
                         refs_lock.lock();
                         ref[0] = CIRCLE_SPEED;
@@ -211,9 +212,9 @@ void* navigation_control(void* args){
             refs_lock.unlock();
             seen_cone = false;
             *us_flag = false;
+            desiered_angle = angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]);
             
-            if(ref[1] < angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) + angle_range
-               && ref[1] > angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - angle_range){
+            if(ref[1] < desiered_angle + angle_range && ref[1] > desiered_angle - angle_range){
                 refs_lock.lock();
                 if(targets == 1){
                     // state = GO_TO_SECOND;
@@ -236,7 +237,10 @@ void* navigation_control(void* args){
             }
             else{
                 refs_lock.lock();
-                ref[1] -= ANGLE_TO_ADD;
+                if(ref[1] > desiered_angle)
+                    ref[1] -= ANGLE_TO_ADD;
+                else
+                    ref[1] += ANGLE_TO_ADD / 2;
                 refs_lock.unlock();
             }
             break;

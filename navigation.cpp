@@ -29,13 +29,12 @@ double angle_range = ANGLE_TO_ADD;
 
 // Return the angle between two points
 double angle_from_positions(double x1, double y1, double x2, double y2){
-    double d_x = x1 - x2;
-    double d_y = y1 - y2;
+    double d_x = x2 - x1;
+    double d_y = y2 - y1;
     double angle = atan2(d_y, d_x) * 180 / PI;
     if(angle > 90)
       angle -= 360;
-
-    return angle;
+    return angle - 24.67;
 }
 
 double distance_betwen_two_points(double x1, double y1, double x2, double y2){
@@ -69,8 +68,8 @@ void* navigation_control(void* args){
 
     // Casting
     navigationArgs* navigation_arguments = (navigationArgs*)args;
-    volatile double* ref = (volatile double*) navigation_arguments->arg_refs;
-    volatile double* readings = (volatile double*) navigation_arguments->arg_g_readings;
+    double* ref = navigation_arguments->arg_refs;
+    double* readings = navigation_arguments->arg_g_readings;
     bool* us_flag = (bool*) navigation_arguments->arg_us;
 
     // Sync
@@ -84,36 +83,46 @@ void* navigation_control(void* args){
 
     double distance_left;
     double desiered_angle;
+    double angle_error;
 
     for(;;){
         switch (state)
         {
         case START:
-            refs_lock.lock();
-            
-            ref[0] = MAX_SPEED;
-            // Where the robot is: (3,3); where it needs to go: (40,20)
-            ref[1] = angle_from_positions(  robot_position[0],
+            angle_error = angle_from_positions(  robot_position[0],
                                             robot_position[1],
                                             targets_position[0],
                                             targets_position[1]);
+            if(readings[1] > 0.001 || readings[1] < -0.001 ){
+                sensors_lock.lock();
+                refs_lock.lock();
+                
+                ref[0] = MAX_SPEED;
+                // Where the robot is: (3,3); where it needs to go: (40,20)
+                ref[1] = angle_error - readings[1];
+                state = GO_TO_FIRST;
 
-            refs_lock.unlock();
-
-            state = GO_TO_FIRST;
-            cout << "Started" << endl;
+                cout << "Started" << readings[1] << endl;
+                refs_lock.unlock();
+                sensors_lock.unlock();
+            }
             break;
             
         case GO_TO_FIRST:
+            sensors_lock.lock();
+            refs_lock.lock();
+            ref[1] = angle_error - readings[1];
+            refs_lock.unlock();
+            sensors_lock.unlock();
             distance_left = distance_betwen_two_points(3, 3, targets_position[0], targets_position[1]) - readings[0];
             if(distance_left <= DISTANCE_TO_USE_VISION){
                 cout << "Vision On" << endl;
                 if(distance_left < DISTANCE_TO_START_GO_AROUND){
                     cout << "US On" << endl;
-                    // if(!*us_flag){
-                    //     cout << "IN HERE" << endl;
-                    //     *us_flag = true;
-                    // }
+                    if(!*us_flag){
+                        cout << "IN HERE" << endl;
+                        *us_flag = true;
+                    }
                     if(US_find_cone() || distance_left < DISTANCE_ARRIVED){
                         refs_lock.lock();
                         ref[0] = CIRCLE_SPEED;
@@ -146,6 +155,14 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_SECOND:
+            sensors_lock.lock();
+            refs_lock.lock();
+            ref[1] = angle_from_positions(  targets_position[0],
+                                            targets_position[1],
+                                            targets_position[2],
+                                            targets_position[3]) - readings[1];
+            refs_lock.unlock();
+            sensors_lock.unlock();
             if(distance_betwen_two_points(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - readings[0] <= DISTANCE_TO_USE_VISION){
                 if(distance_betwen_two_points(targets_position[0], targets_position[1], targets_position[2], targets_position[3]) - readings[0] < DISTANCE_TO_START_GO_AROUND){
                     if(!us_flag)
@@ -178,6 +195,14 @@ void* navigation_control(void* args){
             break;
             
         case GO_TO_LAST:
+            sensors_lock.lock();
+            refs_lock.lock();
+            ref[1] = angle_from_positions(  targets_position[2],
+                                            targets_position[3],
+                                            targets_position[4],
+                                            targets_position[5]) - readings[1];
+            refs_lock.unlock();
+            sensors_lock.unlock();
             if(!us_flag)
                 *us_flag = true;
             if(distance_betwen_two_points(targets_position[2], targets_position[3],targets_position[4], targets_position[5]) - readings[0] <= DISTANCE_TO_USE_VISION){
@@ -214,8 +239,9 @@ void* navigation_control(void* args){
             *us_flag = false;
             desiered_angle = angle_from_positions(targets_position[0], targets_position[1], targets_position[2], targets_position[3]);
             
+            refs_lock.lock();
+            sensors_lock.lock();
             if(ref[1] < desiered_angle + angle_range && ref[1] > desiered_angle - angle_range){
-                refs_lock.lock();
                 if(targets == 1){
                     // state = GO_TO_SECOND;
                     state = END;
@@ -223,7 +249,7 @@ void* navigation_control(void* args){
                     ref[1] = angle_from_positions(  targets_position[0],
                                                     targets_position[1],
                                                     targets_position[2],
-                                                    targets_position[3]);
+                                                    targets_position[3]) - readings[1];
                 }
                 else{
                     state = GO_TO_LAST;
@@ -231,18 +257,17 @@ void* navigation_control(void* args){
                     ref[1] = angle_from_positions(  targets_position[2],
                                                     targets_position[3],
                                                     targets_position[4],
-                                                    targets_position[5]);
+                                                    targets_position[5]) - readings[1];
                 }
-                refs_lock.unlock();
             }
             else{
-                refs_lock.lock();
                 if(ref[1] > desiered_angle)
                     ref[1] -= ANGLE_TO_ADD;
                 else
                     ref[1] += ANGLE_TO_ADD / 2;
-                refs_lock.unlock();
             }
+            refs_lock.unlock();
+            sensors_lock.unlock();
             break;
 
         case DODGE:
@@ -260,12 +285,14 @@ void* navigation_control(void* args){
                     ref[1] += SMALL_ANGLE_TO_DODGE;
             }
             else{
+                sensors_lock.lock();
                 state = GO_TO_LAST;
                 // Where the robot is: (30,2); where it needs to go: (6,18)
                 ref[1] = angle_from_positions(  robot_position[0],
                                                 robot_position[1],
                                                 targets_position[4],
-                                                targets_position[5]);
+                                                targets_position[5])  - readings[1];
+                sensors_lock.unlock();
             }
             refs_lock.unlock();
             update_robot_position(readings[0], readings[1]);
